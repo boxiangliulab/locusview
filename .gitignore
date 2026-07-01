@@ -1,0 +1,44 @@
+# ── Secrets & local config ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/adr/*.md
+secrets/
+
+# ── Data (never commit; can be many GB) ────────────────────────────────
+data/*
+!data/.gitkeep
+!data/fixtures/            # small, curated test fixtures are tracked deliberately
+*.parquet
+*.vcf
+*.vcf.gz
+*.vcf.gz.tbi
+*.bgz
+*.tbi
+*.csi
+
+# ── Python ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.uv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── OS / editor ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same branch to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync
+      - name: Lint (ruff)
+        run: uv run ruff check .
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+      - name: Type check (mypy, strict)
+        run: uv run mypy
+      - name: Tests + coverage gate
+        # The coverage floor (--cov-fail-under=90) is configured in pyproject.toml.
+        # A future enhancement: a diff-based coverage gate (diff-cover) that fails
+        # a PR which lowers coverage on the lines it touches.
+        run: uv run pytest
+
+  genomics-smoke:
+    name: Genomics runtime smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install genomics toolchain
+        run: sudo apt-get update && sudo apt-get install -y tabix bcftools
+      - name: Prove the runtime (bgzip + tabix round-trip)
+        run: bash scripts/smoke_tabix.sh
+
+  docker-build:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the runtime image (installs bcftools/tabix)
+        run: docker build -t locusview:ci .

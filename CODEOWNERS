@@ -1,0 +1,19 @@
+# Code owners — GitHub auto-requests a review from these owners on matching PRs.
+# This is the enforcement behind "agents write, humans merge" (ADR-0005): the two
+# engineers must review all code and tests.
+#
+# TODO(team): replace the @placeholders with the two engineers' real GitHub
+# usernames before enabling "Require review from Code Owners" in branch protection.
+# Until then these lines are inert.
+
+# Code and tests: the two engineers.
+/src/        @engineer-one @engineer-two
+/tests/      @engineer-one @engineer-two
+
+# CI, containers, and guardrails: the two engineers.
+/.github/    @engineer-one @engineer-two
+/Dockerfile  @engineer-one @engineer-two
+/.pre-commit-config.yaml  @engineer-one @engineer-two
+
+# Product, process, and course docs can be reviewed by anyone on the team;
+# no CODEOWNERS entry means the default reviewers apply.
