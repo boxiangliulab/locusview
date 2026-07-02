@@ -26,13 +26,23 @@ the same database that powers locuscompare2.
    **reconciled against the locuscompare2 schema** rather than defined independently.
 
 ## Open items — owner: **Junbin** (tracked in [backlog](../process/backlog.md), item B1)
-These are required before Phase-1 storage work can start; the decision above stands regardless:
-- Identify the **DBMS** (Postgres / MySQL / other) and version.
-- **Document the schema** for locuscompare2's QTL data into `docs/reference/` (tables, columns, keys,
-  how datasets/associations/tissues/studies are modelled).
-- Provide locusview a **connection and access model**: least-privilege roles — read-only for the
-  public serving path; a separate, carefully-scoped write path for Phase-5 contributions.
-- Define **schema-change coordination** between locuscompare2 and locusview (migrations, ownership).
+These were required before Phase-1 storage work could start; the decision above stands regardless.
+**Documented via issue #1** (the code-level facts are now reverse-engineered from `locuscompare2_backend`):
+- ✅ Identify the **DBMS** and version → **MySQL 8.0.x / InnoDB**, schema `colotool`
+  ([reference §1](../reference/locuscompare2-database.md#1-dbms-and-version)).
+- ✅ **Document the schema** for locuscompare2's QTL data into `docs/reference/` →
+  [locuscompare2 database reference](../reference/locuscompare2-database.md) (catalog+shard model,
+  integer-encoded keys, tables, keys, read recipe, and a reconciliation table vs our
+  [schema principles](../reference/schema.md)).
+- ✅ Provide locusview a **connection and access model** (least-privilege read-only serving role; a
+  separate scoped Phase-5 writer) →
+  [connection how-to](../how-to/connect-to-locuscompare2-database.md).
+- ✅ Define **schema-change coordination** (migrations, ownership) →
+  [schema-change coordination](../process/schema-change-coordination.md).
+
+**Still needs a human decision** (data owners) before code depends on it: the authoritative host +
+issued credentials, pinning the MySQL version, and the allele/MAF + PII-isolation questions — see
+[reference §9](../reference/locuscompare2-database.md#9-open-questions-for-the-data-owners-needs-human).
 
 ## Consequences
 - **+** Reuse an existing, populated QTL database — potentially skipping much of the Phase-1 ingestion

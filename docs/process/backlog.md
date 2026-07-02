@@ -6,9 +6,10 @@
 
 ## Open
 
-| ID | Item | Owner | Blocks / context |
-|---|---|---|---|
-| **B1** | **Document the locuscompare2 database for locusview reuse.** Identify the DBMS + version; dump and annotate the QTL schema into `docs/reference/` (tables, columns, keys, how datasets/associations/tissues/studies are modelled); provide locusview a scoped connection + access model (read-only for serving, a separate write path for Phase-5); and define schema-change coordination between the two apps. | **Junbin** | Blocks Phase-1 storage work. Decision: [ADR-0008](../adr/0008-store-qtl-in-locuscompare2-database.md). |
+_(none)_
 
 ## Done
-_(empty — move items here with the resolving PR/ADR when closed)_
+
+| ID | Item | Owner | Resolution |
+|---|---|---|---|
+| **B1** | **Document the locuscompare2 database for locusview reuse.** Identify the DBMS + version; dump and annotate the QTL schema into `docs/reference/` (tables, columns, keys, how datasets/associations/tissues/studies are modelled); provide locusview a scoped connection + access model (read-only for serving, a separate write path for Phase-5); and define schema-change coordination between the two apps. | **Junbin** | Docs delivered (issue #1): [DBMS + annotated schema](../reference/locuscompare2-database.md), [connection + least-privilege access model](../how-to/connect-to-locuscompare2-database.md), [schema-change coordination](../process/schema-change-coordination.md). Decision: [ADR-0008](../adr/0008-store-qtl-in-locuscompare2-database.md). Residual **`needs-human`** items (authoritative host + credentials, version pinning, allele/MAF + PII decisions) are listed in the reference §9. |
