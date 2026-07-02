@@ -111,8 +111,9 @@ Adopting this is a recommendation to the owners, not a Phase-1 blocker.
   ever read), a sample gene round-trips through encode→query→decode, and a shard resolves. Run against a
   seeded fixture in CI and, ideally, a nightly job against a real replica. A red contract test is the
   early warning that the owner changed something.
-- **Pin the server version.** Replace `mysql:latest` with an explicit tag (e.g. `mysql:8.0`); treat a
-  MySQL major-version bump as a coordinated change.
+- **Pin the server version.** The live server is **MySQL 8.3.0**, but the backend's compose file uses
+  the floating `mysql:latest` tag — replace it with an explicit tag (e.g. `mysql:8.3`) and treat a
+  MySQL version bump as a coordinated change.
 - **Shared backup/restore ownership.** The owner runs backups; locusview confirms its read surface is
   covered and documents its RPO/RTO expectation.
 

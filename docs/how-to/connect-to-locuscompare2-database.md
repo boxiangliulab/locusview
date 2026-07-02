@@ -17,7 +17,7 @@
 ## The access model in one picture
 
 ```
-locuscompare2_backend ──(root / owner)──▶  colotool  (single MySQL 8.0 instance, InnoDB)
+locuscompare2_backend ──(root / owner)──▶  colotool  (single MySQL 8.3.0 instance, InnoDB)
                                              ▲   ▲
               locusview serving path ────────┘   │   GRANT SELECT   (read-only)     ← Phase 1
               locusview Phase-5 writer ──────────┘   GRANT INSERT/UPDATE on scoped   ← Phase 5, off by default
@@ -36,6 +36,43 @@ locusview must **never** use the backend's `root` account (`db_config.py` ships 
 not reproduced here).
 
 ---
+
+## 0. Shared test/demo read-only account (verified 2026-07-02)
+
+A **non-production, read-only** account exists for development and for the CI contract tests. Use it to
+explore the schema and to run the read-path examples — **never** for production serving.
+
+| Field | Value |
+|---|---|
+| Host / Port | **held out of this repo until the PII grant below is restricted** — see the warning |
+| Database | `colotool` |
+| User | `locusview_test` |
+| Password | **held out** (currently equal to the username, so publishing it + the endpoint = working access) |
+| TLS | optional on this test endpoint (connections arrive NAT'd as `172.21.0.1`) |
+
+> 🔴 **Do not publish these credentials until the account is restricted.** As verified on 2026-07-02,
+> `locusview_test` holds `GRANT SELECT ON colotool.*` and **can read the `user` table** (442 rows incl.
+> `email` and `encrypted_password`). Because this repo is **public**, committing a working password for
+> a PII-readable account would expose that PII. Restrict the grant first (below); once `SELECT … FROM
+> user` is denied, the password can safely go in this table.
+
+**Restrict the test account to non-PII tables (run as root).** MySQL grants are additive and have no
+"all-except", so revoke the schema-wide grant and re-grant everything *except* `user`:
+
+```sql
+REVOKE SELECT ON colotool.* FROM 'locusview_test'@'%';
+SET SESSION group_concat_max_len = 1024*1024;
+-- Generates one GRANT per table except `user`; run the produced statements:
+SELECT GROUP_CONCAT(
+         CONCAT('GRANT SELECT ON colotool.`', table_name, '` TO ''locusview_test''@''%'';')
+         SEPARATOR '\n')
+FROM information_schema.tables
+WHERE table_schema = 'colotool' AND table_name <> 'user';
+FLUSH PRIVILEGES;
+```
+
+(A tighter alternative — grant only the QTL/expression/annotation/1000G tables + `eqtl_snp_%` shards —
+is Option B in §2; either removes `user` from reach.)
 
 ## 1. Prerequisites (data owner)
 

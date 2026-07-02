@@ -9,253 +9,202 @@
 > [how-to: connect to the locuscompare2 database](../how-to/connect-to-locuscompare2-database.md);
 > the change process is [schema-change coordination](../process/schema-change-coordination.md).
 >
-> **Source of truth.** Everything here was reverse-engineered from the `locuscompare2_backend`
-> codebase (the Flask/SQLAlchemy service that owns and writes this database), not from a live `SHOW
-> CREATE TABLE` dump — we do not yet have credentials. File citations are given so each fact can be
-> re-verified against the backend. Where a value could not be pinned exactly (e.g. the server patch
-> version), that is called out. Confirm against the live instance before Phase-1 storage work relies
-> on it.
+> **Status: verified against the live instance on 2026-07-02** (read-only `locusview_test` account,
+> MySQL 8.3.0). Facts below were first reverse-engineered from `locuscompare2_backend` and then
+> confirmed with `SHOW CREATE TABLE` / `information_schema` / sample queries; verified counts are
+> point-in-time and will drift as datasets are loaded.
 
 ---
 
-## 1. DBMS and version
+## 1. DBMS and version (verified)
 
-| Fact | Value | Evidence (in `locuscompare2_backend`) |
+| Fact | Value | How confirmed |
 |---|---|---|
-| Engine | **MySQL** (Community), storage engine **InnoDB** | `docker-compose.yaml` (`image: mysql:latest`); `gencode_v26_hg38` DDL shows `ENGINE=InnoDB` (`debug/mysql.py`) |
-| Major version | **MySQL 8.0.x** (see caveat) | `command: --default-authentication-plugin=mysql_native_password` is an 8.0-era server option; client is `mysql-connector-python==8.3.0` (`requirements.txt`) |
-| Version pinning | **Unpinned** — deployed from the floating `mysql:latest` tag | `docker-compose.yaml` |
-| Driver (app) | **PyMySQL 1.0.2** via SQLAlchemy 2.0.4 / Flask-SQLAlchemy 3.0.3; URL scheme `mysql+pymysql://` | `requirements.txt`, `src/config/db_config.py` |
-| Database (schema) name | **`colotool`** | `src/config/db_config.py`, `docker-compose.yaml` (`MYSQL_DATABASE`) |
-| Connection charset | `utf8` (an alias for **utf8mb3**, 3-byte — *not* full utf8mb4) | `DB_URI = ...?charset=utf8` |
-| Auth plugin | `mysql_native_password` | `docker-compose.yaml` |
-| Dev/compose port | host `13306` → container `3306` | `docker-compose.yaml`, `debug/mysql.py` |
+| Engine | **MySQL 8.3.0**, "MySQL Community Server - GPL", storage engine **InnoDB** | `SELECT VERSION()`, `@@version_comment`, `@@default_storage_engine` |
+| Server charset / collation | **`utf8mb4` / `utf8mb4_0900_ai_ci`** (most tables). Exceptions: `gencode_v26_hg38` and the `tkg_*` 1000G tables are **`latin1`** | `@@character_set_server`; per-table `SHOW CREATE TABLE` |
+| Schema (database) name | **`colotool`** | connected |
+| Total tables | **990** | `information_schema.tables` |
+| Endpoint | A Kubernetes **NodePort** on the lab cluster; connections arrive NAT'd (server sees client as `172.21.0.1`). Concrete host/port live in the [how-to](../how-to/connect-to-locuscompare2-database.md), added once the test reader is PII-restricted | connect |
+| Driver (app) | **PyMySQL 1.0.2** via SQLAlchemy 2.0.4 / Flask-SQLAlchemy 3.0.3; URL scheme `mysql+pymysql://` | `locuscompare2_backend/requirements.txt` |
+| App connection charset | backend connects with `?charset=utf8` (**utf8mb3** handshake) against utf8mb4 tables | `locuscompare2_backend/src/config/db_config.py` |
 
 **Caveats worth a human decision (issue is labelled `needs-human`):**
 
-- **The version is not pinned.** `mysql:latest` means the actual server version depends on when the
-  container was last pulled; it is almost certainly 8.0.x but could drift. Two applications sharing one
-  database should pin an explicit tag (e.g. `mysql:8.0`). Flagged in
-  [schema-change coordination](../process/schema-change-coordination.md).
-- **`utf8` = `utf8mb3`.** The app connects with the 3-byte alias. If any QTL text ever needs 4-byte
-  characters this silently truncates; new tables should prefer `utf8mb4`. Note also that
-  `gencode_v26_hg38` is declared `DEFAULT CHARSET=latin1` — charset is **not** consistent across
-  tables.
-- The backend historically also pointed at managed hosts (`*.mysql.aigene.org.cn`, commented out in
-  `db_config.py`/`utils.py`). The **canonical instance locusview should read is a decision for the
-  data owners** — see the how-to.
+- **Compose pins nothing.** The backend's `docker-compose.yaml` uses `mysql:latest`; the live server
+  happens to be **8.3.0**. Two apps sharing one database should pin an explicit tag (e.g. `mysql:8.3`).
+  Flagged in [schema-change coordination](../process/schema-change-coordination.md).
+- **Connection vs storage charset mismatch.** Storage is `utf8mb4` (good), but the backend connects
+  with the 3-byte `utf8`(mb3) alias. locusview should connect with **`utf8mb4`** to match the tables.
+- **Charset is not uniform:** `gencode_v26_hg38` and the `tkg_*` reference tables are `latin1` while the
+  QTL tables are `utf8mb4`.
 
 ---
 
-## 2. The one thing that will bite you: keys are integer-encoded
+## 2. The one thing that will bite you: keys are integer-encoded (verified)
 
 The high-volume tables do **not** store identifiers as strings. On ingest the backend strips the
 prefix and stores a bare integer, so locusview must apply the same transform to query, and the inverse
-to display. All transforms live in `src/utils/utils.py`.
+to display. Transforms live in `locuscompare2_backend/src/utils/utils.py`. Verified from a live
+`eqtl_snp_1` row `(rs_id=867721319, chrom=11, gene_id=177951, position=128951, pvalue='0.837…',
+beta='-0.03', se='0.1466', trait_id=NULL)`:
 
 | Identifier | Stored as | Encode (query) | Decode (display) | Notes |
 |---|---|---|---|---|
-| Gene (`ENSG…`) | `BIGINT` | `get_gene_id_num`: strip `ENSG` + leading zeros, **drop `.NN` version** → int (`ENSG00000204936.3` → `204936`) | `get_gene_id_string`: `ENSG` + zero-pad to 11 digits (`204936` → `ENSG00000204936`) | **Lossy:** version suffix is discarded. The unversioned ENSG is the join key. |
-| Variant rsID (`rs…`) | `BIGINT` | `get_rs_id_num`: strip `rs` → int (`rs204936` → `204936`) | `get_rs_id_string`: `'rs' + n` | Only handles the `rs` prefix. Non-`rs` IDs (merged/`TMP_*`/indel names) do **not** round-trip and were historically mapped to `-1` or skipped. |
-| Chromosome (`chr…`) | `SMALLINT` | `get_chrom_num`: strip `chr`/`CHR`/`Chr` → int | index into `positions[]` for genome-wide coords | **Autosomes 1–22 only.** `X`/`Y`/`MT` are not integer-parseable and are **dropped at ingest** (`src/services/eqtl.py`: `if type(row[chrom]) != int64: continue`). |
+| Gene (`ENSG…`) | `BIGINT` | strip `ENSG` + leading zeros, **drop `.NN` version** (`ENSG00000177951` → `177951`) | `ENSG` + zero-pad to 11 digits (`177951` → `ENSG00000177951`) | **Lossy:** version suffix discarded. |
+| Variant rsID (`rs…`) | `BIGINT` | strip `rs` (`rs867721319` → `867721319`) | `'rs' + n` | Only `rs`-prefixed IDs round-trip; merged/`TMP_*`/indel names do not. |
+| Chromosome (`chr…`) | `SMALLINT` | strip `chr`/`CHR`/`Chr` → int | — | **Autosomes 1–22 only** — verified `SELECT DISTINCT chrom` returns exactly 1..22. `X`/`Y`/`MT` are dropped at ingest. |
 
-**Consequence for locusview:** a gene/variant lookup must encode inputs the same way, and the served
-data has **no chrX/chrY/chrMT eQTL** and no non-rs variants. Both are real coverage gaps to surface in
-the UI, not silently.
+**Consequence for locusview:** encode inputs the same way; the served eQTL data has **no
+chrX/Y/MT** and **no non-rs variants** — surface both as explicit "not covered", not empty results.
 
 ---
 
-## 3. Genome build and gene annotation
+## 3. Genome build and gene annotation (verified)
 
-- **Build is GRCh38/hg38.** Confirmed by the cumulative-offset table `positions[]` (GRCh38 chromosome
-  lengths, `src/utils/utils.py`) and by the annotation table name `gencode_v26_hg38`. GTEx v8 is
-  GRCh38-based; the eQTL-Catalogue `_ge` datasets are GRCh38. There is no build column — GRCh38 is an
-  implicit, global invariant of this database.
-- **Gene annotation is GENCODE v26** (`gencode_v26_hg38`; an older `gencode_v19_gtex_v6p_hg38` also
-  exists). This is the lookup for gene **symbol** and **coordinates**, joined on the *versioned* ENSG
-  (`WHERE gene_id LIKE 'ENSG…​.%'`, see `get_gene_name`).
+- **Build is GRCh38/hg38** throughout (annotation table `gencode_v26_hg38`; GTEx v8 and eQTL-Catalogue
+  `_ge` are GRCh38). There is no per-row build column — GRCh38 is a global invariant.
+- **Gene annotation: GENCODE v26** — `gencode_v26_hg38`, **58,182 rows**, columns `chr, start, end,
+  strand, gene_name, gene_id, type` (gene_name/gene_id/type are `latin1`). `gene_id` here is the
+  **versioned** ENSG; the backend joins it with `WHERE gene_id LIKE 'ENSG…​.%'` for symbol/coordinates.
 
 ---
 
 ## 4. Core QTL schema (what locusview reuses)
 
-### The catalog / shard pattern
+### The catalog / shard pattern (verified)
 
-QTL data is stored in **two layers**, and this is the single most important structural fact:
+QTL data is stored in **two layers**:
 
-1. **`eqtl_raw`** is a **dataset catalog** — one row per tissue/dataset. Its "value-looking" columns
+1. **`eqtl_raw`** is a **dataset catalog** — **280 rows**, one per dataset (**49 `gtex-v8`** + **231
+   `eqtl_catalog`**; no `ge`/`leaf-cutter` rows exist in this instance). Its value-looking columns
    (`rsid`, `gene_id`, `chrom`, `position`, `alt`, `ref`, `beta`, `pvalue`, `maf`) do **not** hold
-   data; they hold the **name of the corresponding column in that dataset's source file**, used by the
-   loader to map source → canonical. (See `add_eqtl_raw`/`init_eqtl_raw_list` in `src/services/eqtl.py`,
-   which literally assign `gene_id = "molecular_trait_id"`, `chrom = "chromosome"`, etc.)
-2. **`eqtl_snp_{eqtl_raw_id}`** holds the actual per-variant associations, **one physical table per
-   dataset** (dynamic/sharded; name = `eqtl_snp_` + the `eqtl_raw.id`). There is no single "all eQTL"
-   table; you union/query per dataset.
+   data — they hold the **source-file column name** for that field. Verified: every GTEx row has
+   `gene_id='molecular_trait_id'`, `chrom='chromosome'`, `ref='ref'`, `alt='alt'`, `maf='maf'`.
+2. **`eqtl_snp_{eqtl_raw_id}`** holds the actual per-variant associations — **one physical table per
+   dataset** (**280 shards** live; e.g. `eqtl_snp_1` ≈ 138 M rows). Query per dataset; there is no
+   unified "all eQTL" table.
 
-> ⚠ **Do not read `eqtl_raw.gene_id` as a gene.** It is the string `"molecular_trait_id"`. The same
+> ⚠ **Do not read `eqtl_raw.gene_id` as a gene.** It is the string `"molecular_trait_id"`. Same
 > catalog-with-column-name-mapping pattern applies to `gwas_raw` (§6).
 
 ### `eqtl_raw` — eQTL dataset catalog
-
 | Column | Type | Meaning |
 |---|---|---|
 | `id` | BIGINT PK | Dataset id; also the shard suffix (`eqtl_snp_{id}`) and the `tissue_id` referenced by TPM (§5). |
-| `tissue` | VARCHAR(255) | Dataset name = source filename stem (e.g. `Whole_Blood`, `BLUEPRINT_monocyte_ge`). Used as the human label. |
-| `type` | VARCHAR(32), default `gtex-v8` | One of `gtex-v8`, `ge`, `eqtl_catalog`, `leaf-cutter` (constants `EQTL_TYPE_*`). |
-| `rsid`,`gene_id`,`chrom`,`position`,`alt`,`ref`,`beta`,`pvalue`,`maf` | VARCHAR(128) | **Source-file column names**, *not* values (e.g. `gene_id="molecular_trait_id"`). Ingest-time mapping only. |
-| `url` | VARCHAR(255) | S3/OSS key of the preprocessed dataset tarball (source of alleles/MAF not in the SNP table — see §7). |
+| `tissue` | VARCHAR(255) | Dataset name = source filename stem (e.g. `Whole_Blood`, `BLUEPRINT_monocyte_ge`). |
+| `type` | VARCHAR(32) | `gtex-v8` (49) or `eqtl_catalog` (231). |
+| `rsid`,`gene_id`,`chrom`,`position`,`alt`,`ref`,`beta`,`pvalue`,`maf` | VARCHAR(128) | **Source-file column names**, not values. |
+| `url` | VARCHAR(255) | S3 key of the preprocessed dataset tarball (source of alleles/MAF — §7/§8). |
 | `file_path` | VARCHAR(255) | Path to the dataset on the lab's compute box. |
-| `info` (attr `info_json`) | VARCHAR(4096) | JSON of tissue metadata for `eqtl_catalog`/`ge`/`leaf-cutter` datasets (empty for plain GTEx v8). |
+| `info` (attr `info_json`) | VARCHAR(4096) | JSON tissue metadata for `eqtl_catalog` datasets (empty for plain GTEx v8). |
 
-Datasets are seeded from **hardcoded lists** in `src/utils/utils.py` (`EQTL_LIST` = GTEx v8's 49
-tissues; `EQTL_CATALOG` = eQTL-Catalogue `_ge` datasets), not discovered dynamically.
-
-### `eqtl_snp_{eqtl_raw_id}` — per-dataset eQTL associations (sharded)
-
-One row = one (variant, gene) association within that dataset. Defined by the `EqtlSnp` abstract model
-in `src/model/models.py`.
-
-| Column | Type | Meaning |
-|---|---|---|
-| `id` | BIGINT PK AI | |
-| `rs_id` | BIGINT | Variant, integer-encoded (§2). |
-| `chrom` | SMALLINT (idx) | Autosome 1–22 (§2). |
-| `position` | BIGINT | GRCh38 coordinate. |
-| `gene_id` | BIGINT (idx) | Gene, integer-encoded (§2). For `leaf-cutter`, see `trait_id`. |
-| `pvalue` | VARCHAR(32) | **Stored as text** — cast on read. |
-| `beta` | VARCHAR(32) | Effect size, **text**. Sign is **uninterpretable without the effect allele**, which is not in this table (§7). |
-| `se` | VARCHAR(32) | Standard error, **text**. |
-| `trait_id` | BIGINT (idx), nullable | Only for `leaf-cutter`: FK → `trait_item.id` (the intron/molecular-trait). Null otherwise. |
-| — index | `idx_eqtl_snp_join (chrom, rs_id)` | Plus single-column indexes on `chrom`, `gene_id`. |
-
-**Absent here (important):** no `ref`/`alt`/`effect_allele`, no `maf`, no `variant_id`. See §7.
+### `eqtl_snp_{eqtl_raw_id}` — per-dataset eQTL associations (sharded) — verified DDL
+```sql
+CREATE TABLE `eqtl_snp_1` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `se` varchar(32) NOT NULL,
+  `rs_id` bigint NOT NULL,               -- variant, integer-encoded
+  `chrom` smallint NOT NULL,             -- autosome 1..22
+  `gene_id` bigint NOT NULL,             -- gene, integer-encoded
+  `position` bigint NOT NULL,            -- GRCh38 coordinate
+  `pvalue` varchar(32) DEFAULT NULL,     -- TEXT: cast on read
+  `beta` varchar(32) NOT NULL,           -- TEXT: sign uninterpretable w/o effect allele (§8)
+  `trait_id` bigint DEFAULT NULL,        -- FK -> trait_item.id (leafcutter); NULL for gene-level
+  PRIMARY KEY (`id`),
+  KEY `ix_eqtl_snp_1_gene_id` (`gene_id`), KEY `ix_eqtl_snp_1_chrom` (`chrom`),
+  KEY `ix_eqtl_snp_1_trait_id` (`trait_id`), KEY `idx_eqtl_snp_join` (`chrom`,`rs_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+```
+**Absent here (important):** no `ref`/`alt`/`effect_allele`, no `maf`, no `variant_id`. See §7–§8.
 
 ---
 
 ## 5. Gene expression (TPM) tables
 
-### `gene_median_tpm`
-| Column | Type | Meaning |
-|---|---|---|
-| `id` | BIGINT PK | |
-| `gene_id` | BIGINT (idx) | Gene, integer-encoded (§2). |
-| `description` | VARCHAR(30) | Gene symbol. |
-
-Loaded from GTEx v8 `..._gene_median_tpm.gct` (`src/services/tpm.py`).
-
-### `gene_median_tpm_tissue_relation`
-| Column | Type | Meaning |
-|---|---|---|
-| `id` | BIGINT PK | |
-| `tpm_id` | BIGINT | FK → `gene_median_tpm.id`. |
-| `tissue_id` | BIGINT | **FK → `eqtl_raw.id`** (not a separate tissue table). |
-| `value` | FLOAT | Median TPM for that gene in that tissue. |
-
-> Note the join quirk: "tissue" here is an `eqtl_raw` row id, so TPM tissues only exist for tissues
-> that also have an eQTL dataset.
+- **`gene_median_tpm`** — `id`, `gene_id` (BIGINT, encoded, indexed), `description` (VARCHAR(30), gene
+  symbol). Loaded from GTEx v8 median-TPM GCT.
+- **`gene_median_tpm_tissue_relation`** — `id`, `tpm_id` (→ `gene_median_tpm.id`), `tissue_id`
+  (**→ `eqtl_raw.id`**, not a separate tissue table), `value` (FLOAT median TPM).
 
 ---
 
-## 6. Molecular-trait mapping and the GWAS/coloc co-tenants
+## 6. Molecular-trait mapping and the other co-tenants
 
-locusview's read path is the eQTL/TPM tables above. The tables below live in the **same `colotool`
-schema** — they matter for the *coupling* story (why change-coordination exists) and because a
-read-only role will see them.
+locusview's read path is the eQTL/TPM tables above. The rest of the `colotool` schema matters for the
+*coupling* story and because a broad read grant would expose it.
 
-### `trait_item` — leafcutter intron ↔ gene
-| Column | Type | Meaning |
-|---|---|---|
-| `id` | BIGINT PK | The integer referenced by `eqtl_snp_*.trait_id`. |
-| `gene_id` | BIGINT (idx) | Gene, integer-encoded. |
-| `trait_id` | VARCHAR(64) (idx), nullable | The **original trait string** (e.g. a leafcutter intron id). |
+- **`trait_item`** — leafcutter intron ↔ gene: `id` (the int referenced by `eqtl_snp_*.trait_id`),
+  `gene_id` (BIGINT, encoded), `trait_id` (VARCHAR(64), the **original trait string**). ⚠ Naming
+  inversion: `trait_item.trait_id` is a string name; `eqtl_snp_*.trait_id` is the integer `trait_item.id`.
+- **`gwas_raw`** — GWAS dataset catalog, same catalog+column-map pattern as `eqtl_raw`. 🐛 Verified: it
+  literally contains a **stray-quote column name `effect_allele_frequency"`** — quote it exactly, and
+  consider fixing on the locuscompare2 side.
+- **`gwas_snp_{gwas_raw_id}`** — per-GWAS SNPs, **406 shards**; `rs_id`, `chrom`, `position`, `p_value`
+  (FLOAT), `beta`, `se`, `manh_plot_used` (TINYINT, Manhattan downsample flag). No allele columns.
+- **`colocalization_record`** (≈1.8 K rows) and **`colocalization_gene_result_{id}`** (**174 shards**,
+  `id = record.id // 10`; per-method scores as VARCHAR(32)); **`gwas_genomic_loci`**; **`PvalueThre`**.
+- **`user`** — ⚠ **PII, 442 rows**: `id`, `email` VARCHAR(64), `user_name` VARCHAR(60), `uuid`
+  VARCHAR(64) (session token), `encrypted_password` VARCHAR(256), `organisation` VARCHAR(64),
+  `create_at`. **A read-only serving role must not reach this table** (how-to §2/§7).
 
-> ⚠ Naming inversion: `trait_item.trait_id` is a **string name**; `eqtl_snp_*.trait_id` is the
-> **integer `trait_item.id`**. They are not the same field.
+### 1000 Genomes reference panels (verified — relevant to the allele gap)
+The schema also carries **1000 Genomes Phase 3 v5a** reference data, which is where alleles and
+population frequencies actually live:
 
-### `gwas_raw` — GWAS dataset catalog (same catalog+column-map pattern as `eqtl_raw`)
-Confirmed in `src/services/gwas.py`, which reads source columns via `row[gwas_raw_item.rs_id]`, etc.
-Real dataset metadata: `trait`, `type`, `sample_size`, `url`, `sha256` (indexed, dedup hash),
-`extra`, `tool_config`, `test_genomic_window`. The columns `rs_id`, `chrom`, `position`, `beta`,
-`effect_allele`, `other_allele`, `p_value`, `standard_error`, `effect_allele_frequency` are
-**source-column-name mappings**, not values.
+- **`tkg_p3v5a_hg38`** (**82.5 M rows**) and **`tkg_p3v5a_hg19`** — columns `chr, pos, rsid, ref, alt,
+  AF, EAS_AF, AMR_AF, AFR_AF, EUR_AF, SAS_AF`; indexed on `rsid` and `(chr,pos)`. (`latin1`.)
+- **`tkg_p3v5a_ld_chr{1..22,X}_{AFR,AMR,EAS,EUR,SAS}`** — per-chromosome, per-super-population LD tables.
 
-> 🐛 Data-quality note: the effect-allele-frequency column is declared with a **stray trailing
-> double-quote** in the model — `Column('effect_allele_frequency"', …)` — so the physical column name
-> is literally `effect_allele_frequency"`. Anyone querying it must quote it exactly. Worth fixing on
-> the locuscompare2 side.
-
-### `gwas_snp_{gwas_raw_id}` — per-GWAS SNPs (sharded)
-`rs_id` BIGINT, `chrom` SMALLINT, `position` BIGINT, `p_value` FLOAT (idx), `beta` VARCHAR(128),
-`se` VARCHAR(128), `manh_plot_used` TINYINT (idx, Manhattan-plot downsample flag); index
-`idx_gwas_snp_join (chrom, rs_id)`. Same integer encoding; no allele columns.
-
-### Colocalization result tables
-- **`colocalization_record`** — one row per (GWAS × eQTL) coloc run: `task_id`, `gwas_raw_id`,
-  `eqtl_raw_id`, `user_id`, p-value cutoffs, `tools`, `population`, timestamps, `duration`, `state`
-  (`WAITING|RUNNING|FAILED|SUCCESS|STOPPED`), `progress`, `cromwell_id`, `extra_info`.
-- **`colocalization_gene_result_{table_id}`** — per-gene coloc scores, **sharded**; `table_id =
-  colocalization_record.id // 10` (`get_colot_result_table_id`). Columns: `job_record_id`, `gene_id`
-  (BIGINT, encoded), `chrom`, and per-method scores as **VARCHAR(32)** (`coloc`, `ecaviar`, `enloc`,
-  `mrank`, `rank_geo`, `fusion`, `predixcan`, `smr`, `intact`, `coloc_H3`, `p_HEIDI`); index
-  `idx_colot_result_join (job_record_id, gene_id)`.
-- **`gwas_genomic_loci`** — clustered GWAS loci per run: `job_record_id` (idx), `chrom`, `lead_snp`,
-  `total_snp`, `start_pos`, `end_pos`, `rs_id`, `var_id`.
-- **`PvalueThre`** — per-record significance thresholds/notes for each coloc method.
-
-### Application / infrastructure tables (not QTL)
-- **`user`** — ⚠ **contains PII**: `email`, `user_name`, `uuid` (session token), `encrypted_password`,
-  `organisation`, `create_at`. The read-only serving role should **not** be able to read this
-  (see the how-to).
-- **`news`** — announcement strings + `is_sent` flag.
-- **`table1`** (`id`, `job_id`) and **`logs_{year}`** (`id`, `content`, `user_id`, `score`) — legacy /
-  placeholder; not used by any query locusview needs.
+This means the **`ref`/`alt` alleles and per-ancestry allele frequencies missing from `eqtl_snp_*` can
+be recovered by joining variants to `tkg_p3v5a_hg38`** on `rsid` (or `chr,pos`) — see §8.
 
 ---
 
 ## 7. How locusview reads an eQTL association (recipe)
 
-1. **Resolve dataset(s).** `SELECT id, tissue, type, info FROM eqtl_raw` and pick by `tissue`/`type`.
-   The `id` is the shard suffix.
-2. **Encode the query keys** (§2): gene `ENSG…` → int; variant `rs…` → int; chrom `chr…` → smallint.
-3. **Query the shard.** `SELECT rs_id, chrom, position, gene_id, pvalue, beta, se, trait_id FROM
-   eqtl_snp_{id} WHERE gene_id = :g` (add `chrom`/`position` window as needed — indexes favour
-   `(chrom, rs_id)` and `gene_id`).
-4. **Cast** `pvalue`/`beta`/`se` from text to float.
-5. **Decode for display** (§2): int → `ENSG…`, int → `rs…`. Join `gencode_v26_hg38` on the versioned
-   ENSG for **gene symbol + coordinates**; join `gene_median_tpm(+_tissue_relation)` for expression.
-6. **For alleles / MAF / effect-allele-aware β** (not in the DB — §8), read the dataset's source
-   tarball via `eqtl_raw.url`, or fold alleles into the schema during Phase-1 reconciliation.
+1. **Resolve dataset(s):** `SELECT id, tissue, type, info FROM eqtl_raw` → pick by `tissue`/`type`; `id`
+   is the shard suffix.
+2. **Encode keys** (§2): gene→int, variant→int, chrom→smallint.
+3. **Query the shard:** `SELECT rs_id, chrom, position, gene_id, pvalue, beta, se, trait_id FROM
+   eqtl_snp_{id} WHERE gene_id = :g` (indexes favour `(chrom, rs_id)` and `gene_id`).
+4. **Cast** `pvalue`/`beta`/`se` text → float.
+5. **Decode + enrich:** int→`ENSG…`/`rs…`; join `gencode_v26_hg38` (versioned ENSG) for symbol +
+   coordinates; join `gene_median_tpm(+_tissue_relation)` for expression.
+6. **For alleles / AF:** join `tkg_p3v5a_hg38` on `rsid`/`(chr,pos)` (§8) — or read the dataset source
+   tarball via `eqtl_raw.url`.
 
 ---
 
-## 8. Reconciliation against locusview's schema principles
+## 8. Reconciliation against locusview's schema principles (verified)
 
-locusview's [canonical schema principles](schema.md) were written before this database was chosen.
-ADR-0008 says they must now be **reconciled** with reality. The material gaps:
-
-| locusview principle (`schema.md`) | locuscompare2 reality | Gap / action |
+| locusview principle (`schema.md`) | locuscompare2 reality (verified) | Gap / action |
 |---|---|---|
-| **#1 stable keys** — variant key `chrom:pos:ref:alt`; unversioned ENSG gene key | Variant key is an **rsID integer** (no ref/alt); gene key is unversioned ENSG int ✓ | Gene key aligns. **Variant key does not** — there is no normalized `chrom:pos:ref:alt`, and rsIDs "merge and change" exactly as the principle warns. Decide a variant-identity strategy in Phase 1. |
-| **#2 effect direction is explicit** — always store `effect_allele`; β relative to `alt` | `eqtl_snp_*` stores **no ref/alt/effect_allele**; β sign is uninterpretable from the DB alone | **Biggest gap.** Alleles live only in source files (`eqtl_raw.url`). Either ingest alleles into the schema or always carry the source file. This directly threatens the "#1 cross-dataset bug" the principle exists to prevent. |
-| **#3 biological-context axis** (`is_single_cell`, UBERON/CL/EFO) | Only a free-text `tissue` string + a coarse `type`; no ontology columns | Add the structured context axis in Phase 1; map existing `tissue` strings to UBERON. |
-| **#4 provenance travels with every record** (build, harmonization, pipeline/version, access date) | Partial: `type`, `url`, `file_path`, `info_json`, GWAS `sha256`; **no** genome-build/harmonization/version columns | Build is an implicit global GRCh38; make provenance explicit per dataset. |
-| **#5 genome build canonical GRCh38** | GRCh38 throughout ✓ | Aligned. |
-| **MAF available** (implied by downstream filtering) | `eqtl_snp_*` has **no `maf`** (only a column-name placeholder in `eqtl_raw`) | Source-file only; ingest if needed for serving. |
-| Coverage | **Autosomes 1–22 only; rs-style variants only** (§2) | Surface chrX/Y/MT and non-rs variants as explicit "not covered", not empty results. |
+| **#1 stable keys** — `chrom:pos:ref:alt`; unversioned ENSG | Gene key = unversioned ENSG int ✓. Variant key = **rsID int, no ref/alt** in `eqtl_snp_*` | Gene aligns. **No normalized variant id**; rsIDs merge/change. Decide a variant-identity strategy in Phase 1 (rsID + `tkg` join, or ingest `chr:pos:ref:alt`). |
+| **#2 effect direction explicit** — store `effect_allele`; β vs `alt` | `eqtl_snp_*` has **no ref/alt/effect_allele** — β sign uninterpretable alone. **BUT** `tkg_p3v5a_hg38` provides `ref`/`alt` per variant | **Reduced from "blocking" to "resolvable":** join to 1000G to recover ref/alt. ⚠ Caveat: 1000G ref/alt ≠ the *dataset's* effect allele; the eQTL source file remains the authority for β direction. Confirm alignment before trusting signs. |
+| **#3 biological-context axis** (`is_single_cell`, UBERON/CL/EFO) | Free-text `tissue` + coarse `type` only | Add structured context in Phase 1; map `tissue` → UBERON. |
+| **#4 provenance per record** (build, harmonization, versions) | Partial: `type`, `url`, `file_path`, `info_json`; no build/harmonization columns | Build is implicit GRCh38; make provenance explicit per dataset. |
+| **#5 GRCh38 canonical** | GRCh38 throughout ✓ | Aligned. |
+| **MAF available** | Not in `eqtl_snp_*`. `tkg_p3v5a_hg38` has `AF` + per-pop (`EAS/AMR/AFR/EUR/SAS`) | Recover population AF via 1000G join (again ≠ dataset MAF); or ingest from source. |
+| Coverage | **Autosomes 1–22 only; rs-style variants only** (verified) | Surface as explicit "not covered". |
 
-These gaps are **inputs to ADR-0006** (the canonical schema, to be ratified in Phase 1 against real
-rows) and to the Phase-5 contribution model ([ADR-0007](../adr/0007-community-contribution-model.md)).
+These feed **ADR-0006** (canonical schema, Phase 1) and the Phase-5 model
+([ADR-0007](../adr/0007-community-contribution-model.md)).
 
 ---
 
 ## 9. Open questions for the data owners (`needs-human`)
 
-1. **Canonical instance & credentials** — which host is authoritative (local compose vs a managed
-   MySQL), and issue locusview a least-privilege account (see the how-to).
-2. **Pin the server version** — replace `mysql:latest` with an explicit tag.
-3. **Alleles/MAF** — can the eQTL SNP tables gain `ref`/`alt`/`maf` columns (or a materialized view),
-   so β sign is interpretable without the source tarballs?
-4. **PII isolation** — move `user` (and other app tables) out of the reader's reach, ideally into a
-   separate schema, so a QTL read grant can't touch personal data.
-5. **utf8mb3 → utf8mb4** and the `effect_allele_frequency"` column-name typo — fix on the
-   locuscompare2 side or document as permanent quirks.
+Updated with what the live check answered:
+
+1. ✅ **DBMS/version** — MySQL **8.3.0** (but pin the compose tag; `mysql:latest` today ≠ tomorrow).
+2. **Authoritative host** — the verified endpoint is a **test** Kubernetes NodePort. Confirm the
+   host locusview *production* should read (managed instance / read replica), and issue it a
+   least-privilege account (how-to).
+3. ⚠ **PII isolation — now urgent.** The `user` table (442 rows: email + `encrypted_password`) sits in
+   `colotool`, and the current test read-only account (`SELECT ON colotool.*`) **can read it**. Restrict
+   the reader to non-PII tables, and ideally move `user`/app tables to a separate schema (how-to §0/§7).
+4. **Alleles/MAF** — confirmed recoverable via the `tkg_p3v5a_hg38` 1000G join, but that is not the
+   dataset's own effect allele. Decide whether to add `ref`/`alt` to the eQTL tables (or a view) so β
+   is interpretable without the source tarballs.
+5. **Quirks to fix or accept** — the `effect_allele_frequency"` column-name typo; `utf8mb4` tables vs
+   the backend's `utf8`(mb3) connection; `latin1` on `gencode`/`tkg` tables.
