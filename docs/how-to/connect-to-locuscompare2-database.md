@@ -39,30 +39,47 @@ not reproduced here).
 
 ## 0. Shared test/demo read-only account (verified 2026-07-02)
 
-A **non-production, read-only** account exists for development and for the CI contract tests. Use it to
-explore the schema and to run the read-path examples — **never** for production serving.
+A **non-production, read-only** account for development and the CI contract tests. Use it to explore
+the schema and run the read-path examples — **never** for production serving.
 
 | Field | Value |
 |---|---|
-| Host / Port | **held out of this repo until the PII grant below is restricted** — see the warning |
+| Host | `54.254.162.217` (= `mysql.locuscompare2.com`) |
+| Port | `31987` (Kubernetes NodePort) |
 | Database | `colotool` |
 | User | `locusview_test` |
-| Password | **held out** (currently equal to the username, so publishing it + the endpoint = working access) |
-| TLS | optional on this test endpoint (connections arrive NAT'd as `172.21.0.1`) |
+| Password | `locusview_test` |
+| TLS | optional on this endpoint (connections arrive NAT'd as `172.21.0.1`) |
 
-> 🔴 **Do not publish these credentials until the account is restricted.** As verified on 2026-07-02,
-> `locusview_test` holds `GRANT SELECT ON colotool.*` and **can read the `user` table** (442 rows incl.
-> `email` and `encrypted_password`). Because this repo is **public**, committing a working password for
-> a PII-readable account would expose that PII. Restrict the grant first (below); once `SELECT … FROM
-> user` is denied, the password can safely go in this table.
+**Verified access (2026-07-02):** read-only on the QTL / expression / annotation / 1000G tables; the
+**`user` PII table is denied** — `SELECT … FROM user` returns `ERROR 1142`. Confirmed with a live probe
+after scoping (below).
 
-**Restrict the test account to non-PII tables (run as root).** MySQL grants are additive and have no
-"all-except", so revoke the schema-wide grant and re-grant everything *except* `user`:
+> ⚠ These are deliberately public, low-value **test** credentials (the password equals the username).
+> Do not reuse this pattern for anything that can reach PII or accept writes. Production serving must
+> use a secret-store-injected `locusview_ro` (§2–§5), not this account. Consider a stronger password
+> here too, to limit unauthenticated query load on the shared instance.
+
+Quick check:
+
+```bash
+uv run --with pymysql python - <<'PY'
+import pymysql
+c = pymysql.connect(host="54.254.162.217", port=31987,
+                    user="locusview_test", password="locusview_test", database="colotool")
+cur = c.cursor(); cur.execute("SELECT id, tissue, type FROM eqtl_raw LIMIT 3"); print(cur.fetchall())
+PY
+```
+
+<details><summary>How the account was scoped to exclude PII (run as root)</summary>
+
+MySQL grants are additive with no "all-except", so revoke the schema-wide grant and re-grant every
+table **except `user`**:
 
 ```sql
 REVOKE SELECT ON colotool.* FROM 'locusview_test'@'%';
 SET SESSION group_concat_max_len = 1024*1024;
--- Generates one GRANT per table except `user`; run the produced statements:
+-- Emits one GRANT per table except `user`; run the produced statements, then FLUSH.
 SELECT GROUP_CONCAT(
          CONCAT('GRANT SELECT ON colotool.`', table_name, '` TO ''locusview_test''@''%'';')
          SEPARATOR '\n')
@@ -71,8 +88,9 @@ WHERE table_schema = 'colotool' AND table_name <> 'user';
 FLUSH PRIVILEGES;
 ```
 
-(A tighter alternative — grant only the QTL/expression/annotation/1000G tables + `eqtl_snp_%` shards —
-is Option B in §2; either removes `user` from reach.)
+A tighter alternative — grant only the QTL/expression/annotation/1000G tables + `eqtl_snp_%` shards —
+is Option B in §2.
+</details>
 
 ## 1. Prerequisites (data owner)
 

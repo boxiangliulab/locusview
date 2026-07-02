@@ -24,7 +24,7 @@
 | Server charset / collation | **`utf8mb4` / `utf8mb4_0900_ai_ci`** (most tables). Exceptions: `gencode_v26_hg38` and the `tkg_*` 1000G tables are **`latin1`** | `@@character_set_server`; per-table `SHOW CREATE TABLE` |
 | Schema (database) name | **`colotool`** | connected |
 | Total tables | **990** | `information_schema.tables` |
-| Endpoint | A Kubernetes **NodePort** on the lab cluster; connections arrive NAT'd (server sees client as `172.21.0.1`). Concrete host/port live in the [how-to](../how-to/connect-to-locuscompare2-database.md), added once the test reader is PII-restricted | connect |
+| Endpoint (test) | Kubernetes **NodePort** `54.254.162.217:31987` (= `mysql.locuscompare2.com:31987`); connections arrive NAT'd (server sees client as `172.21.0.1`). Read-only test account in the [how-to §0](../how-to/connect-to-locuscompare2-database.md) | connect |
 | Driver (app) | **PyMySQL 1.0.2** via SQLAlchemy 2.0.4 / Flask-SQLAlchemy 3.0.3; URL scheme `mysql+pymysql://` | `locuscompare2_backend/requirements.txt` |
 | App connection charset | backend connects with `?charset=utf8` (**utf8mb3** handshake) against utf8mb4 tables | `locuscompare2_backend/src/config/db_config.py` |
 
@@ -197,12 +197,13 @@ These feed **ADR-0006** (canonical schema, Phase 1) and the Phase-5 model
 Updated with what the live check answered:
 
 1. ✅ **DBMS/version** — MySQL **8.3.0** (but pin the compose tag; `mysql:latest` today ≠ tomorrow).
-2. **Authoritative host** — the verified endpoint is a **test** Kubernetes NodePort. Confirm the
-   host locusview *production* should read (managed instance / read replica), and issue it a
-   least-privilege account (how-to).
-3. ⚠ **PII isolation — now urgent.** The `user` table (442 rows: email + `encrypted_password`) sits in
-   `colotool`, and the current test read-only account (`SELECT ON colotool.*`) **can read it**. Restrict
-   the reader to non-PII tables, and ideally move `user`/app tables to a separate schema (how-to §0/§7).
+2. **Authoritative host** — the verified endpoint is a **test** Kubernetes NodePort
+   (`54.254.162.217:31987`). Confirm the host locusview *production* should read (managed instance /
+   read replica), and issue it a least-privilege account (how-to).
+3. **PII isolation.** The `user` table (442 rows: email + `encrypted_password`) sits in `colotool`. The
+   test reader has now been **scoped to exclude `user`** (verified 2026-07-02: `SELECT … FROM user` →
+   `ERROR 1142`), so every reader grant must likewise exclude it. Cleaner still: move `user`/app tables
+   to a separate schema so a QTL read grant *cannot* reach PII (how-to §0/§7).
 4. **Alleles/MAF** — confirmed recoverable via the `tkg_p3v5a_hg38` 1000G join, but that is not the
    dataset's own effect allele. Decide whether to add `ref`/`alt` to the eQTL tables (or a view) so β
    is interpretable without the source tarballs.
