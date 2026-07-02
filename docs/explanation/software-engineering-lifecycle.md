@@ -163,7 +163,9 @@ reviewed, merge within a day or two, and delete the branch. Short branches ≈ s
 
 **Pull requests & code review.** A PR is a proposed change plus a conversation. Our review standard
 (from Google): **approve when the change improves the overall health of the codebase** — not when
-it's flawless. Reviews spread knowledge and catch mistakes; they are not gatekeeping rituals.
+it's flawless. Reviews spread knowledge and catch mistakes; they are not gatekeeping rituals. For a
+beginner-friendly deep dive on the PR flow, branch protection, and CODEOWNERS, see
+[pull-requests-and-branch-protection.md](pull-requests-and-branch-protection.md).
 
 **Testing & TDD.** A test is code that checks other code, run automatically. **TDD** is the discipline
 of writing the *test first* (it fails — "red"), then the code to pass it ("green"), then cleaning up
