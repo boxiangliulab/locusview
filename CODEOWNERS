@@ -1,19 +1,23 @@
 # Code owners — GitHub auto-requests a review from these owners on matching PRs.
-# This is the enforcement behind "agents write, humans merge" (ADR-0005): the two
-# engineers must review all code and tests.
+# This is the enforcement behind "agents write, humans merge" (ADR-0005): code and
+# tests must be reviewed by an engineer. See docs/explanation/pull-requests-and-branch-protection.md
 #
-# TODO(team): replace the @placeholders with the two engineers' real GitHub
-# usernames before enabling "Require review from Code Owners" in branch protection.
-# Until then these lines are inert.
+# Engineers / code owners:
+#   @gaojunbin      — Junbin Gao
+#   @GhostAnderson  — Laurentius
+#
+# NOTE: a code owner is only effective if they have WRITE access to the repo. Both
+# accounts must be collaborators with write before "Require review from Code Owners"
+# branch protection is enabled (see backlog / issue #11).
 
-# Code and tests: the two engineers.
-/src/        @engineer-one @engineer-two
-/tests/      @engineer-one @engineer-two
+# Code and tests.
+/src/        @gaojunbin @GhostAnderson
+/tests/      @gaojunbin @GhostAnderson
 
-# CI, containers, and guardrails: the two engineers.
-/.github/    @engineer-one @engineer-two
-/Dockerfile  @engineer-one @engineer-two
-/.pre-commit-config.yaml  @engineer-one @engineer-two
+# CI, containers, and guardrails.
+/.github/    @gaojunbin @GhostAnderson
+/Dockerfile  @gaojunbin @GhostAnderson
+/.pre-commit-config.yaml  @gaojunbin @GhostAnderson
 
 # Product, process, and course docs can be reviewed by anyone on the team;
 # no CODEOWNERS entry means the default reviewers apply.

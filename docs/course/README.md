@@ -69,7 +69,7 @@ teaches it (artifact), and where we check it (assessment touchpoint).
 | Record a decision: **ADR** | 1 | `docs/adr/0001–0005` (Nygard format) | Portfolio (ADR authored) |
 | Plan the HOW; the **roadmap** & implementation plans | 3 | `docs/product/roadmap.md`; per-task plans | Milestone demos |
 | **Version control** & trunk-based-lite branching | 2 | `CONTRIBUTING.md`; the git history itself | Portfolio (PRs) |
-| **Pull requests** & code review | 2, 5 | PR template; `CODEOWNERS`; review threads | Portfolio, Peer review |
+| **Pull requests** & code review | 2, 5 | [PR & branch-protection explainer](../explanation/pull-requests-and-branch-protection.md); PR template; `CODEOWNERS`; review threads | Portfolio, Peer review |
 | **Testing & TDD** on error-prone logic | 4 | `tests/` incl. the genomic coordinate-transform test | Milestone 1 (tests pass) |
 | **Continuous Integration** | 4 | `.github/workflows/ci.yml` (lint→test→genomics smoke→coverage) | Milestone demos (green CI) |
 | **Loop engineering** with agents | 5 | `docs/process/agent-workflow.md`; team Skills | Journal, "Lecture 1" debrief |
