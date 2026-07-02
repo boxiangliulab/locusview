@@ -1,6 +1,9 @@
 # ADR-0002: Python-first web stack and file-based storage (provisional)
 
-- **Status:** Accepted — **provisional; revisit after the Phase-1 spike**
+- **Status:** Accepted (provisional). ⚠ **The storage decision is superseded by
+  [ADR-0008](0008-store-qtl-in-locuscompare2-database.md)** (2026-07-02) — QTL data now lives in the
+  shared locuscompare2 database, not Parquet/DuckDB/tabix. The **web-stack** choices below
+  (FastAPI + Jinja2/HTMX) still stand.
 - **Date:** 2026-07-01
 
 ## Context

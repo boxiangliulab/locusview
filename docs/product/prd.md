@@ -43,7 +43,9 @@ navigating a portal built for many purposes, or downloading and parsing large fi
 - Multiple sources or modalities (sQTL/pQTL/single-cell) — Phase 2+.
 - Colocalization with GWAS, fine-mapping/PIP visualization, L2G ranking.
 - Regional (LocusZoom) plots — Phase 3.
-- hg19/multi-build support, accounts, uploads, or locusview-run harmonization.
+- hg19/multi-build support, accounts, or locusview-run harmonization.
+- **User uploads / community contributions** — a key capability, but deferred to a **dedicated later
+  phase** (Phase 5; see the [roadmap](roadmap.md)). Phase 1 stays a read-only slice.
 
 ## 4. User stories
 > *Why: stories keep us honest about who benefits. Format: "As a ⟨user⟩, I want ⟨capability⟩ so that

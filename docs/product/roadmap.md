@@ -12,7 +12,30 @@
 | **2** | Breadth & Harmonization | Add the eQTL Catalogue compendium + a second modality (sQTL); harmonize builds/identifiers. | Planned |
 | **3** | Richer Browse & Visualization | LocusZoom regional plots, filters, tissue browse. | Planned |
 | **4** | Single-cell QTL | Activate the cell-type axis reserved in the schema (e.g., OneK1K). | Planned |
-| Later | Integrations | GWAS colocalization, fine-mapping display, expanded API, accounts. | Backlog |
+| **5** | Community Contributions | Let researchers **upload their own QTL datasets** with curated metadata, **reviewed before publishing**. | Planned |
+| Later | Integrations | GWAS colocalization, fine-mapping display, expanded API. | Backlog |
+
+> **Note on sequencing:** Phase 5 depends only on Phase 1's storage/index and the schema — not on
+> Phases 2–4 — so it can be pulled earlier if community data becomes the priority. Its exact position
+> is deliberately flexible.
+
+## Community contributions (Phase 5) — confirmed requirements
+
+A key long-term goal: locusview accepts **user-contributed QTL datasets**, not just curated ones.
+Decisions locked with the team (2026-07):
+
+- **Reviewed before public.** A submission is human-curated (metadata, license, sanity) before it
+  becomes searchable/downloadable. Workflow shape: `submitted → validating → in_review →
+  published / rejected`.
+- **Mandated format + metadata form.** Contributors must provide a defined summary-stats format (the
+  eQTL Catalogue tabix TSV schema) plus a web form; non-conforming files are rejected with clear errors.
+- **Required metadata fields:** tissue type, **ancestry** *(new schema axis — needs the HANCESTRO
+  ontology, distinct from tissue)*, sample size, perturbations (if any), and **license of use**
+  (commercial-ok vs non-commercial-only — a machine-readable, filterable field).
+
+*Full design (workflow states, exact field spec/vocabularies, upload security, contributor identity)
+is being finalized from a research pass and will land as a contribution design doc + ADR, extending
+the [schema principles](../reference/schema.md) with the ancestry and license fields.*
 
 ## Data-source roadmap
 
