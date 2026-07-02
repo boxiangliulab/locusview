@@ -2,22 +2,21 @@
 # This is the enforcement behind "agents write, humans merge" (ADR-0005): code and
 # tests must be reviewed by an engineer. See docs/explanation/pull-requests-and-branch-protection.md
 #
-# Engineers / code owners:
+# Engineers / code owners (all have write access):
+#   @boxiangliu     — Boxiang Liu (lead)
 #   @gaojunbin      — Junbin Gao
 #   @GhostAnderson  — Laurentius
 #
-# NOTE: a code owner is only effective if they have WRITE access to the repo. Both
-# accounts must be collaborators with write before "Require review from Code Owners"
-# branch protection is enabled (see backlog / issue #11).
+# NOTE: a code owner is only effective if they have WRITE access to the repo.
 
 # Code and tests.
-/src/        @gaojunbin @GhostAnderson
-/tests/      @gaojunbin @GhostAnderson
+/src/        @boxiangliu @gaojunbin @GhostAnderson
+/tests/      @boxiangliu @gaojunbin @GhostAnderson
 
 # CI, containers, and guardrails.
-/.github/    @gaojunbin @GhostAnderson
-/Dockerfile  @gaojunbin @GhostAnderson
-/.pre-commit-config.yaml  @gaojunbin @GhostAnderson
+/.github/    @boxiangliu @gaojunbin @GhostAnderson
+/Dockerfile  @boxiangliu @gaojunbin @GhostAnderson
+/.pre-commit-config.yaml  @boxiangliu @gaojunbin @GhostAnderson
 
 # Product, process, and course docs can be reviewed by anyone on the team;
 # no CODEOWNERS entry means the default reviewers apply.
