@@ -17,8 +17,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # Install dependencies first (better layer caching). The package build needs the
-# source tree and README, so copy those before syncing.
-COPY pyproject.toml uv.lock README.md ./
+# source tree, README, and LICENSE (pyproject declares license = {file = "LICENSE"}),
+# so copy those before syncing.
+COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
