@@ -86,7 +86,8 @@ Here is the whole loop. The example is a real locusview task — issue **#3, "ap
      [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml): lint, type-check, tests + coverage,
      a genomics smoke test (a tiny end-to-end check that the `bgzip`/`tabix` genomics tools actually
      run), and a Docker build. A red ✗ means "not ready — don't merge."
-   - A **teammate reviews the diff** and either approves or requests changes.
+   - A **teammate reviews the diff** and either approves or requests changes. (How to *do* that review
+     well: [how-to-review-code.md](how-to-review-code.md).)
 5. **Merge, then delete the branch.** Once CI is green *and* a human approves, you merge. Your changes
    are now part of `main`; the branch has done its job and is deleted.
 
