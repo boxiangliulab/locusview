@@ -7,9 +7,9 @@ Defines the :class:`QtlRepository` interface (a ``Protocol``) plus two implement
 
 **locuscompare2 model (verified against the live DB).** ``eqtl_raw`` is a *catalog* of datasets
 (one row per tissue; ``id`` -> shard). The associations live in per-dataset shard tables
-``eqtl_snp_{id}`` with integer-encoded keys (``rs_id``, ``gene_id``, ``chrom``). NOTE: the shards
-store no ref/alt/effect_allele or MAF, so ``beta``'s sign is not interpretable from the DB alone
-(tracked in issue #18) — hence :class:`EqtlAssociation` has no effect-allele field.
+``eqtl_snp_{id}`` with integer-encoded keys (``rs_id``, ``gene_id``, ``chrom``). Gene metadata
+(symbol <-> Ensembl id <-> coordinates) lives in ``gencode_v26_hg38``. NOTE: the shards store no
+ref/alt/effect_allele or MAF, so ``beta``'s sign is not interpretable from the DB alone (issue #18).
 
 Programming to this interface lets the app and its tests run against :class:`FakeQtlRepository`
 today and swap in :class:`LocuscompareRepository` unchanged.
@@ -17,6 +17,7 @@ today and swap in :class:`LocuscompareRepository` unchanged.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -29,6 +30,19 @@ class Dataset:
     id: int
     tissue: str
     source: str  # the catalog `type` column, e.g. "gtex-v8"
+
+
+@dataclass(frozen=True)
+class Gene:
+    """A gene resolved from the GENCODE annotation table."""
+
+    gene_id: int  # integer key used by the eqtl_snp shards (the ENSG number)
+    symbol: str
+    ensembl_id: str  # versioned, e.g. "ENSG00000141510.16"
+    chrom: str
+    start: int
+    end: int
+    strand: str
 
 
 @dataclass(frozen=True)
@@ -56,6 +70,10 @@ class QtlRepository(Protocol):
         """Return the dataset catalog."""
         ...
 
+    def resolve_gene(self, symbol_or_ensembl: str) -> Gene | None:
+        """Resolve a gene symbol or Ensembl id to a :class:`Gene`, or ``None`` if unknown."""
+        ...
+
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
     ) -> list[EqtlAssociation]:
@@ -63,42 +81,32 @@ class QtlRepository(Protocol):
         ...
 
 
-# ── Fake (in-memory) ────────────────────────────────────────────────────────
-
-
-class FakeQtlRepository:
-    """In-memory :class:`QtlRepository` for tests and offline development."""
-
-    def __init__(
-        self,
-        datasets: Sequence[Dataset] | None = None,
-        associations: Sequence[EqtlAssociation] | None = None,
-    ) -> None:
-        self._datasets = list(datasets or ())
-        self._associations = list(associations or ())
-
-    def datasets(self) -> list[Dataset]:
-        return list(self._datasets)
-
-    def eqtls_for_gene(
-        self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
-    ) -> list[EqtlAssociation]:
-        wanted = set(dataset_ids)
-        hits = [a for a in self._associations if a.gene_id == gene_id and a.dataset_id in wanted]
-        return hits[:limit]
-
-
-# ── Real (locuscompare2 MySQL) ──────────────────────────────────────────────
+# ── Shared pure helpers ──────────────────────────────────────────────────────
 
 Row = Sequence[Any]
 ConnectionFactory = Callable[[], Any]
+
+_ENSG = re.compile(r"^ENSG0*(\d+)$", re.IGNORECASE)
+_GENCODE_TABLE = "gencode_v26_hg38"  # GTEx v8 uses GENCODE v26 (hg38)
+
+
+def ensembl_number(ensembl_id: str) -> int:
+    """Convert an Ensembl gene id to the integer key used by the shards.
+
+    ``"ENSG00000141510.16"`` or ``"ENSG00000141510"`` -> ``141510``.
+    """
+    core = ensembl_id.split(".", 1)[0]
+    m = _ENSG.match(core)
+    if not m:
+        raise ValueError(f"not an Ensembl gene id: {ensembl_id!r}")
+    return int(m.group(1))
 
 
 def _shard_table(dataset_id: int) -> str:
     """Return the shard table name for a dataset id.
 
-    The id is validated as a non-negative int so it is safe to interpolate into SQL (the shard
-    table name cannot be parameterised, only the values can).
+    The id is validated as a non-negative int so it is safe to interpolate into SQL (a table
+    name cannot be parameterised, only values can).
     """
     if not isinstance(dataset_id, int) or isinstance(dataset_id, bool) or dataset_id < 0:
         raise ValueError(f"dataset_id must be a non-negative int, got {dataset_id!r}")
@@ -136,6 +144,57 @@ def _row_to_eqtl(dataset_id: int, row: Row) -> EqtlAssociation:
     )
 
 
+def _row_to_gene(row: Row) -> Gene:
+    ensembl_id = str(row[1])
+    return Gene(
+        gene_id=ensembl_number(ensembl_id),
+        symbol=str(row[0]),
+        ensembl_id=ensembl_id,
+        chrom=str(row[2]),
+        start=int(row[3]),
+        end=int(row[4]),
+        strand=str(row[5]),
+    )
+
+
+# ── Fake (in-memory) ────────────────────────────────────────────────────────
+
+
+class FakeQtlRepository:
+    """In-memory :class:`QtlRepository` for tests and offline development."""
+
+    def __init__(
+        self,
+        datasets: Sequence[Dataset] | None = None,
+        associations: Sequence[EqtlAssociation] | None = None,
+        genes: Sequence[Gene] | None = None,
+    ) -> None:
+        self._datasets = list(datasets or ())
+        self._associations = list(associations or ())
+        self._genes = list(genes or ())
+
+    def datasets(self) -> list[Dataset]:
+        return list(self._datasets)
+
+    def resolve_gene(self, symbol_or_ensembl: str) -> Gene | None:
+        key = symbol_or_ensembl.strip()
+        core = key.split(".", 1)[0].upper()
+        for g in self._genes:
+            if g.symbol.upper() == key.upper() or g.ensembl_id.split(".", 1)[0].upper() == core:
+                return g
+        return None
+
+    def eqtls_for_gene(
+        self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
+    ) -> list[EqtlAssociation]:
+        wanted = set(dataset_ids)
+        hits = [a for a in self._associations if a.gene_id == gene_id and a.dataset_id in wanted]
+        return hits[:limit]
+
+
+# ── Real (locuscompare2 MySQL) ──────────────────────────────────────────────
+
+
 class LocuscompareRepository:
     """:class:`QtlRepository` backed by the shared locuscompare2 MySQL database.
 
@@ -146,12 +205,16 @@ class LocuscompareRepository:
     def __init__(self, connection_factory: ConnectionFactory) -> None:
         self._connect = connection_factory
 
+    @staticmethod
+    def _run(conn: Any, sql: str, params: Sequence[Any]) -> list[Row]:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        return list(cur.fetchall())
+
     def _query(self, sql: str, params: Sequence[Any]) -> list[Row]:
         conn = self._connect()
         try:
-            cur = conn.cursor()
-            cur.execute(sql, params)
-            return list(cur.fetchall())
+            return self._run(conn, sql, params)
         finally:
             conn.close()
 
@@ -159,19 +222,36 @@ class LocuscompareRepository:
         rows = self._query("SELECT id, tissue, type FROM eqtl_raw", ())
         return [Dataset(id=int(r[0]), tissue=str(r[1]), source=str(r[2])) for r in rows]
 
+    def resolve_gene(self, symbol_or_ensembl: str) -> Gene | None:
+        key = symbol_or_ensembl.strip()
+        select = f"SELECT gene_name, gene_id, chr, start, end, strand FROM {_GENCODE_TABLE} "
+        if key.upper().startswith("ENSG"):
+            core = key.split(".", 1)[0]
+            rows = self._query(select + "WHERE gene_id LIKE %s LIMIT 1", (f"{core}%",))
+        else:
+            rows = self._query(select + "WHERE gene_name = %s LIMIT 1", (key,))
+        return _row_to_gene(rows[0]) if rows else None
+
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
     ) -> list[EqtlAssociation]:
-        out: list[EqtlAssociation] = []
-        for dataset_id in dataset_ids:
-            table = _shard_table(dataset_id)
-            rows = self._query(
-                f"SELECT gene_id, rs_id, chrom, position, pvalue, beta, se "
-                f"FROM {table} WHERE gene_id = %s LIMIT %s",
-                (gene_id, limit),
-            )
-            out.extend(_row_to_eqtl(dataset_id, r) for r in rows)
-        return out
+        if not dataset_ids:
+            return []
+        conn = self._connect()  # one connection for the whole fan-out
+        try:
+            out: list[EqtlAssociation] = []
+            for dataset_id in dataset_ids:
+                table = _shard_table(dataset_id)
+                rows = self._run(
+                    conn,
+                    f"SELECT gene_id, rs_id, chrom, position, pvalue, beta, se "
+                    f"FROM {table} WHERE gene_id = %s LIMIT %s",
+                    (gene_id, limit),
+                )
+                out.extend(_row_to_eqtl(dataset_id, r) for r in rows)
+            return out
+        finally:
+            conn.close()
 
 
 def pymysql_connection_factory() -> ConnectionFactory:
