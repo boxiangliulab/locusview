@@ -15,11 +15,14 @@ from locusview.repository import (
     Dataset,
     EqtlAssociation,
     FakeQtlRepository,
+    Gene,
     LocuscompareRepository,
     _row_to_eqtl,
+    _row_to_gene,
     _shard_table,
     _to_float,
     _to_int,
+    ensembl_number,
     pymysql_connection_factory,
 )
 
@@ -151,6 +154,61 @@ def test_locuscompare_eqtls_for_gene_targets_correct_shards() -> None:
     assert hits[0].beta == -0.03
 
 
+def test_locuscompare_eqtls_for_gene_empty_datasets() -> None:
+    factory, log = _factory([])
+    assert LocuscompareRepository(factory).eqtls_for_gene(1, []) == []
+    assert log == []  # no query issued when there are no datasets
+
+
 def test_pymysql_connection_factory_returns_callable() -> None:
     # Builds the factory (does not connect — that needs a live DB).
     assert callable(pymysql_connection_factory())
+
+
+# ── gene resolution ─────────────────────────────────────────────────────────
+
+_GENCODE = ("TP53", "ENSG00000141510.16", "17", 7661779, 7687550, "-")
+
+
+def test_ensembl_number() -> None:
+    assert ensembl_number("ENSG00000141510.16") == 141510
+    assert ensembl_number("ENSG00000141510") == 141510
+    assert ensembl_number("ensg00000000005") == 5
+
+
+def test_ensembl_number_rejects_bad_input() -> None:
+    with pytest.raises(ValueError):
+        ensembl_number("TP53")
+
+
+def test_row_to_gene() -> None:
+    assert _row_to_gene(_GENCODE) == Gene(
+        141510, "TP53", "ENSG00000141510.16", "17", 7661779, 7687550, "-"
+    )
+
+
+def test_fake_resolve_gene_by_symbol_and_ensembl() -> None:
+    gene = Gene(141510, "TP53", "ENSG00000141510.16", "17", 7661779, 7687550, "-")
+    repo = FakeQtlRepository(genes=[gene])
+    assert repo.resolve_gene("tp53") == gene  # case-insensitive symbol
+    assert repo.resolve_gene("ENSG00000141510") == gene  # unversioned Ensembl id
+    assert repo.resolve_gene("NOPE") is None
+
+
+def test_locuscompare_resolve_gene_by_symbol() -> None:
+    factory, log = _factory([_GENCODE])
+    gene = LocuscompareRepository(factory).resolve_gene("TP53")
+    assert gene == Gene(141510, "TP53", "ENSG00000141510.16", "17", 7661779, 7687550, "-")
+    assert "gene_name = %s" in log[0][0] and log[0][1] == ("TP53",)
+
+
+def test_locuscompare_resolve_gene_by_ensembl_uses_like() -> None:
+    factory, log = _factory([_GENCODE])
+    LocuscompareRepository(factory).resolve_gene("ENSG00000141510.16")
+    assert "gene_id LIKE %s" in log[0][0]
+    assert log[0][1] == ("ENSG00000141510%",)
+
+
+def test_locuscompare_resolve_gene_not_found() -> None:
+    factory, _ = _factory([])
+    assert LocuscompareRepository(factory).resolve_gene("NOPE") is None

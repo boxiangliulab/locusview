@@ -7,7 +7,9 @@
   <!-- HTMX: lets us add interactivity later without a JS build chain (ADR-0002). -->
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }
+    body { font-family: system-ui, sans-serif; max-width: 44rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }
+    input[type=search] { width: 100%; padding: 0.6rem 0.8rem; font-size: 1rem; box-sizing: border-box; }
+    button { padding: 0.6rem 1rem; font-size: 1rem; margin-top: 0.5rem; cursor: pointer; }
     code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 3px; }
     .muted { color: #666; }
   </style>
@@ -15,10 +17,16 @@
 <body>
   <h1>locusview</h1>
   <p>A searchable home for publicly available QTL data.</p>
+
+  <form action="/search" method="get">
+    <input type="search" name="q" placeholder="Gene symbol or Ensembl ID — e.g. TP53" autofocus />
+    <button type="submit">Search</button>
+  </form>
+
   <p class="muted">
-    Phase&nbsp;0/1 skeleton (v{{ version }}). Search, browse, and download are on the way —
-    see the <a href="https://github.com/boxiangliulab/locusview">repository</a> and roadmap.
+    Try <a href="/gene/TP53">TP53</a> or <a href="/gene/ENSG00000141510">ENSG00000141510</a>.
+    Variant and region search are coming; gene search is live.
   </p>
-  <p class="muted">Health check: <code>GET /health</code></p>
+  <p class="muted">Phase&nbsp;1 (v{{ version }}). Data: GTEx v8 via the shared locuscompare2 database.</p>
 </body>
 </html>
