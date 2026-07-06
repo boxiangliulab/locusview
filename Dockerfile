@@ -30,5 +30,6 @@ COPY . .
 RUN useradd --create-home appuser && chown -R appuser /app
 USER appuser
 
-# Placeholder command for Phase 0; becomes the web server in Phase 1.
-CMD ["uv", "run", "locusview"]
+# Serve the web app. Bind 0.0.0.0 so it's reachable from outside the container.
+EXPOSE 8000
+CMD ["uv", "run", "locusview", "serve", "--host", "0.0.0.0", "--port", "8000"]

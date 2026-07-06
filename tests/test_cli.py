@@ -20,3 +20,16 @@ def test_cli_version_flag_exits_zero(capsys: pytest.CaptureFixture[str]) -> None
         main(["--version"])
     assert excinfo.value.code == 0
     assert "locusview" in capsys.readouterr().out
+
+
+def test_cli_serve_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Verify `serve` routing + arg parsing without actually starting uvicorn.
+    called: dict[str, object] = {}
+
+    def fake_serve(host: str, port: int) -> int:
+        called["host"], called["port"] = host, port
+        return 0
+
+    monkeypatch.setattr("locusview.cli._serve", fake_serve)
+    assert main(["serve", "--host", "0.0.0.0", "--port", "9999"]) == 0
+    assert called == {"host": "0.0.0.0", "port": 9999}
