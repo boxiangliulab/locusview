@@ -8,8 +8,11 @@
 > ⚠ **Storage update ([ADR-0008](../adr/0008-store-qtl-in-locuscompare2-database.md)):** QTL data is
 > stored in the **shared locuscompare2 database**, not a locusview-owned file store. The principles
 > below still describe *how we think about a QTL record*, but the concrete schema will be
-> **reconciled with the existing locuscompare2 schema** (its DBMS/tables are being documented by
-> Junbin — backlog B1) rather than defined from scratch.
+> **reconciled with the existing locuscompare2 schema** rather than defined from scratch. That schema
+> is now documented (backlog B1 delivered) in the
+> [locuscompare2 database reference](locuscompare2-database.md); its **§8 reconciliation table** maps
+> each principle below to what the database actually provides and flags the gaps (most notably: the
+> eQTL SNP tables store **no ref/alt/effect_allele** — see principle 2 — and cover **autosomes only**).
 
 ## The shape
 One row = one **(variant, molecular trait, biological context)** association. The internal format is
