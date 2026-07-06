@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "jinja2>=3.1",
     "pydantic-settings>=2.4",
+    "pymysql>=1.1",
 ]
 
 [project.scripts]
@@ -66,4 +67,9 @@ strict = true
 # uvicorn does not ship type information (no py.typed marker).
 [[tool.mypy.overrides]]
 module = ["uvicorn.*"]
+ignore_missing_imports = true
+
+# pymysql does not ship type information.
+[[tool.mypy.overrides]]
+module = ["pymysql.*"]
 ignore_missing_imports = true
