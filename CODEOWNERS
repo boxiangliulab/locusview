@@ -22,5 +22,11 @@
 /Dockerfile  @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
 /.pre-commit-config.yaml  @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
 
+# UI / design surfaces — owned by the UI/UX designer (Liu Fei). These come AFTER
+# /src/ above so they take precedence for these paths (CODEOWNERS = last match wins),
+# making @liufei-f the required reviewer for design docs and the web templates.
+/docs/design/              @liufei-f
+/src/locusview/templates/  @liufei-f
+
 # Product, process, and course docs can be reviewed by anyone on the team;
 # no CODEOWNERS entry means the default reviewers apply.
