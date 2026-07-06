@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>locusview</title>
+  <!-- HTMX: lets us add interactivity later without a JS build chain (ADR-0002). -->
+  <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }
+    code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>locusview</h1>
+  <p>A searchable home for publicly available QTL data.</p>
+  <p class="muted">
+    Phase&nbsp;0/1 skeleton (v{{ version }}). Search, browse, and download are on the way —
+    see the <a href="https://github.com/boxiangliulab/locusview">repository</a> and roadmap.
+  </p>
+  <p class="muted">Health check: <code>GET /health</code></p>
+</body>
+</html>
