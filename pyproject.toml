@@ -45,6 +45,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+# Allow scientific unicode (×, −, ², β, r², −log₁₀) in docstrings/comments/strings.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 # ── pytest + coverage gate ─────────────────────────────────────────────────
 [tool.pytest.ini_options]

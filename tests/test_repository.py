@@ -17,6 +17,7 @@ from locusview.repository import (
     FakeQtlRepository,
     Gene,
     LocuscompareRepository,
+    _ld_table,
     _row_to_eqtl,
     _row_to_gene,
     _shard_table,
@@ -212,3 +213,98 @@ def test_locuscompare_resolve_gene_by_ensembl_uses_like() -> None:
 def test_locuscompare_resolve_gene_not_found() -> None:
     factory, _ = _factory([])
     assert LocuscompareRepository(factory).resolve_gene("NOPE") is None
+
+
+# ── LD / cis / tissues-with-signal ──────────────────────────────────────────
+
+
+def _routing_factory(
+    responder: object,
+) -> tuple[object, list[tuple[str, tuple[object, ...]]]]:
+    """A fake connection whose returned rows depend on the SQL (for multi-query methods)."""
+    log: list[tuple[str, tuple[object, ...]]] = []
+
+    class _Cur:
+        def execute(self, sql: str, params: Sequence[object] = ()) -> None:
+            log.append((sql, tuple(params)))
+            self._rows = responder(sql, tuple(params))  # type: ignore[operator]
+
+        def fetchall(self) -> object:
+            return self._rows
+
+    class _Conn:
+        def cursor(self) -> _Cur:
+            return _Cur()
+
+        def close(self) -> None:
+            pass
+
+    return (lambda: _Conn()), log
+
+
+def test_ld_table_valid() -> None:
+    assert _ld_table("1", "EUR") == "tkg_p3v5a_ld_chr1_EUR"
+    assert _ld_table("X", "AFR") == "tkg_p3v5a_ld_chrX_AFR"
+
+
+@pytest.mark.parametrize(("chrom", "pop"), [("23", "EUR"), ("1", "ALL"), ("Y", "EUR")])
+def test_ld_table_rejects_bad_input(chrom: str, pop: str) -> None:
+    with pytest.raises(ValueError):
+        _ld_table(chrom, pop)
+
+
+def test_fake_cis_associations() -> None:
+    repo = FakeQtlRepository(
+        associations=[
+            EqtlAssociation(8, 141510, 1, 17, 100, 0.01, 0.2, 0.05),
+            EqtlAssociation(8, 999, 2, 17, 200, 0.5, 0.1, 0.05),  # other gene
+            EqtlAssociation(9, 141510, 3, 17, 300, 0.02, 0.3, 0.05),  # other tissue
+        ]
+    )
+    assert [a.rs_id for a in repo.cis_associations(141510, 8)] == [1]
+
+
+def test_fake_ld_r2() -> None:
+    repo = FakeQtlRepository(ld={("17", 111, "EUR"): {222: 0.9}})
+    assert repo.ld_r2("17", 111, "EUR") == {222: 0.9}
+    assert repo.ld_r2("17", 999, "EUR") == {}
+
+
+def test_fake_tissues_with_signal() -> None:
+    repo = FakeQtlRepository(
+        datasets=[Dataset(1, "Whole_Blood", "gtex-v8"), Dataset(2, "Liver", "gtex-v8")],
+        associations=[
+            EqtlAssociation(1, 7, 1, 1, 10, 1e-8, 0.2, 0.05),  # significant in ds 1
+            EqtlAssociation(1, 7, 2, 1, 20, 1e-6, 0.1, 0.05),  # ds 1 (min stays 1e-8)
+            EqtlAssociation(2, 7, 3, 1, 30, 0.5, 0.3, 0.05),  # ds 2: not significant
+        ],
+    )
+    assert repo.tissues_with_signal(7) == [(1, "Whole_Blood", 1e-8)]
+
+
+def test_locuscompare_cis_associations() -> None:
+    factory, log = _factory([(141510, 12345, 17, 7670000, "0.001", "0.2", "0.05")])
+    hits = LocuscompareRepository(factory).cis_associations(141510, 8)
+    assert "eqtl_snp_8 " in log[0][0] and log[0][1] == (141510,)
+    assert hits[0].rs_id == 12345 and hits[0].dataset_id == 8
+
+
+def test_locuscompare_ld_r2_parses_and_dedupes() -> None:
+    factory, log = _factory([("rs100", 0.8), ("rs200", 0.3), ("esv9", 0.9), ("rs111", 1.0)])
+    r2 = LocuscompareRepository(factory).ld_r2("1", 111, "EUR")
+    # 'esv9' skipped (non-rs); the lead rs111 removed so the caller sets it to 1.0.
+    assert r2 == {100: 0.8, 200: 0.3}
+    assert "tkg_p3v5a_ld_chr1_EUR" in log[0][0]
+    assert log[0][1] == ("rs111", "rs111")
+
+
+def test_locuscompare_tissues_with_signal() -> None:
+    def responder(sql: str, params: tuple[object, ...]) -> list[tuple[object, ...]]:
+        if "eqtl_raw" in sql:
+            return [(1, "Whole_Blood", "gtex-v8"), (2, "Liver", "gtex-v8")]
+        if "eqtl_snp_1 " in sql:
+            return [(1e-8,)]
+        return [(0.5,)]  # eqtl_snp_2: not significant
+
+    factory, _ = _routing_factory(responder)
+    assert LocuscompareRepository(factory).tissues_with_signal(7) == [(1, "Whole_Blood", 1e-8)]
