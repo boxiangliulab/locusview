@@ -1,0 +1,16 @@
+{
+  "name": "locusview",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bookworm",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends bcftools tabix && curl -LsSf https://astral.sh/uv/install.sh | sh && $HOME/.local/bin/uv sync",
+  "forwardPorts": [8000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.mypy-type-checker"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
