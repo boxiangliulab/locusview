@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 
 # LocusZoom.js default r² color scheme. Bins are broken at 0.2 / 0.4 / 0.6 / 0.8.
-LD_LEAD_COLOR = "#9632B8"  # the reference/lead variant (drawn as a diamond)
+LD_LEAD_COLOR = "#f97316"  # the reference/lead variant (orange diamond, per Liu Fei's design)
 LD_NULL_COLOR = "#AAAAAA"  # no LD data — distinct from low r²
 LD_BINS: list[tuple[float, str]] = [
     (0.2, "#463699"),  # indigo   0.0–0.2

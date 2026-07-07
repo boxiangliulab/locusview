@@ -114,6 +114,7 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
             "gene.html",
             gene=gene,
             rows=rows,
+            datasets=datasets,
             n_tissues=len(datasets),
             total_tissues=len(all_datasets),
         )
