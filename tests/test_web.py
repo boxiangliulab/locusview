@@ -45,6 +45,15 @@ def test_gene_page_renders_eqtls() -> None:
     assert "rs12345" in response.text  # variant rendered
 
 
+def test_gene_page_has_regional_plot_ui() -> None:
+    html = _gene_client().get("/gene/TP53").text
+    assert 'id="lv-plot"' in html  # Plotly container
+    assert 'id="lv-tissue"' in html and "Stomach" in html  # tissue selector + options
+    assert 'id="lv-population"' in html  # LD population selector
+    assert "cdn.plot.ly" in html  # Plotly loaded
+    assert "/api/gene/" in html  # JS wires the regional endpoint
+
+
 def test_gene_page_unknown_gene_is_404() -> None:
     response = _gene_client().get("/gene/NOPE")
     assert response.status_code == 404
@@ -98,7 +107,7 @@ def test_regional_endpoint_attaches_r2_and_lead() -> None:
     by_rs = {v["rs_id"]: v for v in body["variants"]}
     assert by_rs[111]["is_lead"] is True and by_rs[111]["r2"] == 1.0
     assert by_rs[222]["r2"] == 0.9 and by_rs[333]["r2"] == 0.1
-    assert by_rs[111]["color"] == "#9632B8"  # lead diamond color
+    assert by_rs[111]["color"] == "#f97316"  # lead diamond color (orange, per Liu Fei)
 
 
 def test_regional_unknown_gene_is_404() -> None:

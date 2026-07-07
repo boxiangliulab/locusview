@@ -4,14 +4,34 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ gene.symbol }} — locusview</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
-    .muted { color: #666; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.92rem; }
-    th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #eee; }
-    th { border-bottom: 2px solid #ccc; }
+    :root {
+      --ink: #1e293b; --muted: #64748b; --line: #e2e8f0; --bg: #f8fafc;
+      --surface: #ffffff; --accent: #2563eb; --lead: #f97316;
+    }
+    body { font-family: system-ui, sans-serif; max-width: 62rem; margin: 2.5rem auto; padding: 0 1rem;
+           line-height: 1.5; color: var(--ink); background: var(--bg); }
+    a { color: var(--accent); }
+    .muted { color: var(--muted); }
+    h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.01em; margin: 1.6rem 0 0.4rem; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+            padding: 1rem 1.2rem; box-shadow: 0 1px 3px rgba(15,23,42,0.04); }
+    .controls { display: flex; gap: 1rem; flex-wrap: wrap; align-items: end; margin-bottom: 0.6rem; }
+    .controls label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 2px; }
+    select { font: inherit; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 8px;
+             background: var(--surface); color: var(--ink); }
+    #lv-plot { width: 100%; height: 420px; transition: opacity 0.15s; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line); }
+    th { border-bottom: 2px solid #cbd5e1; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .wrap { overflow-x: auto; }
+    .legend { display: flex; gap: 0.8rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--muted);
+              margin-top: 0.4rem; }
+    .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
+              vertical-align: middle; margin-right: 3px; }
   </style>
 </head>
 <body>
@@ -21,6 +41,39 @@
     {{ gene.ensembl_id }} &middot; chr{{ gene.chrom }}:{{ gene.start }}&ndash;{{ gene.end }}
     (strand {{ gene.strand }}) &middot; internal gene id {{ gene.gene_id }}
   </p>
+
+  <h2>Regional plot</h2>
+  <div class="card">
+    <div class="controls">
+      <div>
+        <label for="lv-tissue">Tissue</label>
+        <select id="lv-tissue">
+          {% for d in datasets %}<option value="{{ d.id }}">{{ d.tissue }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="lv-population">LD population</label>
+        <select id="lv-population">
+          {% for p in ["EUR", "AFR", "AMR", "EAS", "SAS"] %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div id="lv-plot"><p class="muted">Loading…</p></div>
+    <div class="legend">
+      <span><span class="swatch" style="background:#f97316"></span>lead (click any point to re-pick)</span>
+      <span><span class="swatch" style="background:#DB3D11"></span>0.8&ndash;1.0</span>
+      <span><span class="swatch" style="background:#F8C32A"></span>0.6&ndash;0.8</span>
+      <span><span class="swatch" style="background:#6EFE68"></span>0.4&ndash;0.6</span>
+      <span><span class="swatch" style="background:#26BCE1"></span>0.2&ndash;0.4</span>
+      <span><span class="swatch" style="background:#463699"></span>0.0&ndash;0.2</span>
+      <span><span class="swatch" style="background:#AAAAAA"></span>no LD data</span>
+    </div>
+    <p class="muted" style="font-size:0.78rem;margin-top:0.5rem">
+      LD = 1000G phase 3 (selected population) — a single-population approximation and a visual aid to
+      locus structure, not part of the association inference. The dotted line is genome-wide
+      significance (5&times;10<sup>&minus;8</sup>).
+    </p>
+  </div>
 
   <h2>eQTLs</h2>
   <p class="muted">
@@ -55,5 +108,79 @@
   {% endif %}
 
   <p class="muted">locusview v{{ version }}</p>
+
+  <script>
+    const GENE = {{ gene.symbol | tojson }};
+    const plotDiv = document.getElementById("lv-plot");
+    const tissueSel = document.getElementById("lv-tissue");
+    const popSel = document.getElementById("lv-population");
+    const LD_BINS = [[0.2, "#463699"], [0.4, "#26BCE1"], [0.6, "#6EFE68"], [0.8, "#F8C32A"], [1.01, "#DB3D11"]];
+    const LEAD_COLOR = "#f97316", NULL_COLOR = "#AAAAAA";
+    let DATA = null, clickBound = false;
+
+    function r2color(r2, isLead) {
+      if (isLead) return LEAD_COLOR;
+      if (r2 === null || r2 === undefined) return NULL_COLOR;
+      for (const [upper, color] of LD_BINS) { if (r2 < upper) return color; }
+      return "#DB3D11";
+    }
+    function render(colors) {
+      const v = DATA.variants;
+      const traces = [{
+        type: "scattergl", mode: "markers",
+        x: v.map(d => d.position), y: v.map(d => d.log_pvalue),
+        customdata: v.map(d => [d.rs_id, d.pvalue, d.r2]),
+        marker: {
+          color: colors || v.map(d => d.color),
+          size: v.map(d => d.is_lead ? 12 : 7),
+          symbol: v.map(d => d.is_lead ? "diamond" : "circle"), line: { width: 0 },
+        },
+        hovertemplate: "rs%{customdata[0]} · chr" + DATA.region.chrom +
+          ":%{x}<br>p=%{customdata[1]:.2e} · r²=%{customdata[2]}<extra></extra>",
+      }];
+      const layout = {
+        margin: { t: 8, r: 8, b: 44, l: 56 }, hovermode: "closest",
+        xaxis: { title: "Position — chr" + DATA.region.chrom, gridcolor: "#f1f5f9", zeroline: false },
+        yaxis: { title: "−log₁₀(p)", gridcolor: "#f1f5f9", zeroline: false },
+        plot_bgcolor: "#ffffff", paper_bgcolor: "#ffffff", font: { color: "#334155", size: 12 },
+        shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 7.301, y1: 7.301,
+                   line: { color: "#94a3b8", width: 1, dash: "dot" } }],
+      };
+      Plotly.react(plotDiv, traces, layout, { responsive: true, displayModeBar: false });
+      if (!clickBound) { plotDiv.on("plotly_click", onClick); clickBound = true; }
+    }
+    async function onClick(ev) {
+      const rs = ev.points[0].customdata[0];
+      if (rs === null) return;
+      const u = "/api/ld?chrom=" + DATA.region.chrom + "&lead=" + rs +
+        "&population=" + encodeURIComponent(popSel.value);
+      const resp = await fetch(u);
+      if (!resp.ok) return;
+      const m = (await resp.json()).r2;
+      render(DATA.variants.map(d => {
+        const isLead = String(d.rs_id) === String(rs);
+        const key = String(d.rs_id);
+        const r2 = isLead ? 1.0 : (key in m ? m[key] : null);
+        return r2color(r2, isLead);
+      }));
+    }
+    async function load() {
+      plotDiv.style.opacity = "0.4";
+      const u = "/api/gene/" + encodeURIComponent(GENE) + "/regional?tissue=" +
+        tissueSel.value + "&population=" + encodeURIComponent(popSel.value);
+      try {
+        const resp = await fetch(u);
+        if (!resp.ok) throw new Error("no data");
+        DATA = await resp.json();
+        render();
+      } catch (e) {
+        plotDiv.innerHTML = "<p class='muted'>No plot data for this tissue.</p>";
+      }
+      plotDiv.style.opacity = "1";
+    }
+    tissueSel.addEventListener("change", load);
+    popSel.addEventListener("change", load);
+    if (tissueSel.options.length) load();
+  </script>
 </body>
 </html>
