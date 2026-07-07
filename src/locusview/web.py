@@ -12,6 +12,8 @@ The app is built by a factory (:func:`create_app`) that accepts a
 
 from __future__ import annotations
 
+import csv
+import io
 from pathlib import Path
 
 from fastapi import FastAPI, Response
@@ -113,6 +115,48 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
             rows=rows,
             n_tissues=len(datasets),
             total_tissues=len(all_datasets),
+        )
+
+    @app.get("/gene/{key}/download")
+    def download(key: str, format: str = "csv") -> Response:
+        """Download a gene's eQTL table (the current gene-page view) as CSV or TSV."""
+        if format not in ("csv", "tsv"):
+            return Response(
+                "format must be 'csv' or 'tsv'", status_code=400, media_type="text/plain"
+            )
+        gene = repo.resolve_gene(key)
+        if gene is None:
+            return Response(f"gene not found: {key}", status_code=404, media_type="text/plain")
+
+        datasets = repo.datasets()[:_MAX_TISSUES]
+        by_id: dict[int, Dataset] = {d.id: d for d in datasets}
+        eqtls = repo.eqtls_for_gene(gene.gene_id, [d.id for d in datasets], limit=50)
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, delimiter="," if format == "csv" else "\t")
+        writer.writerow(
+            ["gene", "ensembl_id", "tissue", "variant", "chrom", "position", "pvalue", "beta", "se"]
+        )
+        for a in eqtls:
+            dataset = by_id[a.dataset_id]  # eqtls_for_gene only returns the datasets we asked for
+            writer.writerow(
+                [
+                    gene.symbol,
+                    gene.ensembl_id,
+                    dataset.tissue,
+                    f"rs{a.rs_id}" if a.rs_id is not None else "",
+                    a.chrom,
+                    a.position,
+                    a.pvalue,
+                    a.beta,
+                    a.se,
+                ]
+            )
+        media_type = "text/csv" if format == "csv" else "text/tab-separated-values"
+        return Response(
+            content=buffer.getvalue(),
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{gene.symbol}_eqtls.{format}"'},
         )
 
     return app

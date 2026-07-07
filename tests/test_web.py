@@ -69,3 +69,31 @@ def test_search_unsupported_query_is_404() -> None:
     response = _gene_client().get("/search", params={"q": "rs12345"}, follow_redirects=False)
     assert response.status_code == 404
     assert "gene search" in response.text.lower()
+
+
+# ── download (CSV / TSV) ────────────────────────────────────────────────────
+
+
+def test_download_csv() -> None:
+    response = _gene_client().get("/gene/TP53/download")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert 'attachment; filename="TP53_eqtls.csv"' in response.headers["content-disposition"]
+    lines = response.text.strip().splitlines()
+    assert lines[0] == "gene,ensembl_id,tissue,variant,chrom,position,pvalue,beta,se"
+    assert "TP53" in lines[1] and "Whole_Blood" in lines[1] and "rs12345" in lines[1]
+
+
+def test_download_tsv() -> None:
+    response = _gene_client().get("/gene/TP53/download", params={"format": "tsv"})
+    assert response.status_code == 200
+    assert "\t" in response.text
+    assert 'filename="TP53_eqtls.tsv"' in response.headers["content-disposition"]
+
+
+def test_download_unknown_gene_is_404() -> None:
+    assert _gene_client().get("/gene/NOPE/download").status_code == 404
+
+
+def test_download_bad_format_is_400() -> None:
+    assert _gene_client().get("/gene/TP53/download", params={"format": "xml"}).status_code == 400
