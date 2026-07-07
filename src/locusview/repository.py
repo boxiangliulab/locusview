@@ -80,6 +80,20 @@ class QtlRepository(Protocol):
         """Return eQTL associations for ``gene_id`` within the given datasets."""
         ...
 
+    def variant_chrom(self, rs_id: int) -> int | None:
+        """Resolve a variant's chromosome (needed to use the ``(chrom, rs_id)`` index), or None."""
+        ...
+
+    def eqtls_for_variant(
+        self, chrom: int, rs_id: int, dataset_ids: Sequence[int]
+    ) -> list[EqtlAssociation]:
+        """Reverse lookup: every association for one variant across the given datasets."""
+        ...
+
+    def gene_by_id(self, gene_id: int) -> Gene | None:
+        """Resolve a :class:`Gene` from its integer id (reverse of :meth:`resolve_gene`)."""
+        ...
+
 
 # ── Shared pure helpers ──────────────────────────────────────────────────────
 
@@ -191,6 +205,25 @@ class FakeQtlRepository:
         hits = [a for a in self._associations if a.gene_id == gene_id and a.dataset_id in wanted]
         return hits[:limit]
 
+    def variant_chrom(self, rs_id: int) -> int | None:
+        for a in self._associations:
+            if a.rs_id == rs_id:
+                return a.chrom
+        return None
+
+    def eqtls_for_variant(
+        self, chrom: int, rs_id: int, dataset_ids: Sequence[int]
+    ) -> list[EqtlAssociation]:
+        wanted = set(dataset_ids)
+        return [
+            a
+            for a in self._associations
+            if a.chrom == chrom and a.rs_id == rs_id and a.dataset_id in wanted
+        ]
+
+    def gene_by_id(self, gene_id: int) -> Gene | None:
+        return next((g for g in self._genes if g.gene_id == gene_id), None)
+
 
 # ── Real (locuscompare2 MySQL) ──────────────────────────────────────────────
 
@@ -252,6 +285,48 @@ class LocuscompareRepository:
             return out
         finally:
             conn.close()
+
+    def variant_chrom(self, rs_id: int) -> int | None:
+        # The shards have no standalone rs_id index, but the 1000G LD tables are indexed on SNP_A.
+        # Scan autosomes (the eQTL shards are autosomal) for the first chromosome carrying the rsID.
+        snp = f"rs{rs_id}"
+        for chrom in range(1, 23):
+            if self._query(
+                f"SELECT 1 FROM tkg_p3v5a_ld_chr{chrom}_EUR WHERE SNP_A = %s LIMIT 1", (snp,)
+            ):
+                return chrom
+        return None
+
+    def eqtls_for_variant(
+        self, chrom: int, rs_id: int, dataset_ids: Sequence[int]
+    ) -> list[EqtlAssociation]:
+        if not dataset_ids:
+            return []
+        conn = self._connect()  # one connection for the whole fan-out
+        try:
+            out: list[EqtlAssociation] = []
+            for dataset_id in dataset_ids:
+                table = _shard_table(dataset_id)
+                # (chrom, rs_id) hits idx_eqtl_snp_join — a precise seek, ~100 rows not a full scan.
+                rows = self._run(
+                    conn,
+                    f"SELECT gene_id, rs_id, chrom, position, pvalue, beta, se "
+                    f"FROM {table} WHERE chrom = %s AND rs_id = %s",
+                    (chrom, rs_id),
+                )
+                out.extend(_row_to_eqtl(dataset_id, r) for r in rows)
+            return out
+        finally:
+            conn.close()
+
+    def gene_by_id(self, gene_id: int) -> Gene | None:
+        ensg = f"ENSG{gene_id:011d}"  # 141510 -> "ENSG00000141510"
+        rows = self._query(
+            f"SELECT gene_name, gene_id, chr, start, end, strand FROM {_GENCODE_TABLE} "
+            f"WHERE gene_id LIKE %s LIMIT 1",
+            (f"{ensg}%",),
+        )
+        return _row_to_gene(rows[0]) if rows else None
 
 
 def pymysql_connection_factory() -> ConnectionFactory:

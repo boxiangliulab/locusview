@@ -23,6 +23,7 @@ from locusview.config import get_db_settings, get_settings
 from locusview.repository import (
     Dataset,
     FakeQtlRepository,
+    Gene,
     LocuscompareRepository,
     QtlRepository,
     pymysql_connection_factory,
@@ -37,6 +38,12 @@ _TEMPLATES = Environment(
 # How many datasets (tissues) a gene page queries — bounded for responsiveness (issue #5 follow-up
 # will page/rank across all of them).
 _MAX_TISSUES = 25
+
+
+def _rs_to_int(rsid: str) -> int | None:
+    """``"rs12345"`` -> ``12345``; anything else -> ``None``."""
+    s = rsid.strip().lower()
+    return int(s[2:]) if s.startswith("rs") and s[2:].isdigit() else None
 
 
 def _default_repository() -> QtlRepository:
@@ -73,11 +80,13 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
             return RedirectResponse(f"/gene/{parsed.gene_symbol}", status_code=303)
         if parsed.kind is QueryKind.ENSEMBL_GENE and parsed.ensembl_id:
             return RedirectResponse(f"/gene/{parsed.ensembl_id}", status_code=303)
+        if parsed.kind is QueryKind.RSID and parsed.rsid:
+            return RedirectResponse(f"/variant/{parsed.rsid}", status_code=303)
         return _render(
             "not_found.html",
             status_code=404,
             query=q,
-            reason="Only gene search (symbol or Ensembl id) is available so far.",
+            reason="Search supports genes (symbol or Ensembl id) and variants (rsID) so far.",
         )
 
     @app.get("/gene/{name}", response_class=HTMLResponse)
@@ -110,6 +119,55 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
         return _render(
             "gene.html",
             gene=gene,
+            rows=rows,
+            n_tissues=len(datasets),
+            total_tissues=len(all_datasets),
+        )
+
+    @app.get("/variant/{rsid}", response_class=HTMLResponse)
+    def variant_page(rsid: str) -> HTMLResponse:
+        rs_int = _rs_to_int(rsid)
+        if rs_int is None:
+            return _render(
+                "not_found.html",
+                status_code=404,
+                query=rsid,
+                reason="Not a valid rsID (expected e.g. rs12345).",
+            )
+        chrom = repo.variant_chrom(rs_int)
+        if chrom is None:
+            return _render(
+                "not_found.html",
+                status_code=404,
+                query=f"rs{rs_int}",
+                reason="Could not locate this variant on an autosome in the reference panel.",
+            )
+        all_datasets = repo.datasets()
+        datasets = all_datasets[:_MAX_TISSUES]
+        by_id: dict[int, Dataset] = {d.id: d for d in datasets}
+        hits = repo.eqtls_for_variant(chrom, rs_int, [d.id for d in datasets])
+        hits = sorted(hits, key=lambda a: (a.pvalue is None, a.pvalue or 0.0))  # significant first
+        genes: dict[int, Gene | None] = {}
+        rows: list[dict[str, object]] = []
+        for a in hits:
+            if a.gene_id not in genes:
+                genes[a.gene_id] = repo.gene_by_id(a.gene_id)
+            gene = genes[a.gene_id]
+            rows.append(
+                {
+                    "tissue": by_id[a.dataset_id].tissue,
+                    "gene": gene.symbol if gene else str(a.gene_id),
+                    "ensembl_id": gene.ensembl_id if gene else "",
+                    "position": a.position,
+                    "pvalue": a.pvalue,
+                    "beta": a.beta,
+                    "se": a.se,
+                }
+            )
+        return _render(
+            "variant.html",
+            rsid=f"rs{rs_int}",
+            chrom=chrom,
             rows=rows,
             n_tissues=len(datasets),
             total_tissues=len(all_datasets),

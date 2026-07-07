@@ -212,3 +212,71 @@ def test_locuscompare_resolve_gene_by_ensembl_uses_like() -> None:
 def test_locuscompare_resolve_gene_not_found() -> None:
     factory, _ = _factory([])
     assert LocuscompareRepository(factory).resolve_gene("NOPE") is None
+
+
+# ── variant reverse-lookup ──────────────────────────────────────────────────
+
+
+def test_fake_variant_chrom() -> None:
+    repo = FakeQtlRepository(associations=[EqtlAssociation(1, 7, 111, 17, 100, 0.01, 0.2, 0.05)])
+    assert repo.variant_chrom(111) == 17
+    assert repo.variant_chrom(999) is None
+
+
+def test_fake_eqtls_for_variant() -> None:
+    repo = FakeQtlRepository(
+        associations=[
+            EqtlAssociation(1, 7, 111, 17, 100, 0.01, 0.2, 0.05),
+            EqtlAssociation(2, 8, 111, 17, 100, 0.02, 0.1, 0.05),
+            EqtlAssociation(1, 9, 222, 17, 200, 0.5, 0.3, 0.05),  # different variant
+            EqtlAssociation(3, 7, 111, 17, 100, 0.03, 0.1, 0.05),  # dataset not requested
+        ]
+    )
+    hits = repo.eqtls_for_variant(17, 111, [1, 2])
+    assert sorted(a.gene_id for a in hits) == [7, 8]
+
+
+def test_fake_gene_by_id() -> None:
+    gene = Gene(141510, "TP53", "ENSG00000141510.16", "17", 1, 2, "-")
+    repo = FakeQtlRepository(genes=[gene])
+    assert repo.gene_by_id(141510) == gene
+    assert repo.gene_by_id(999) is None
+
+
+def test_locuscompare_variant_chrom_finds_chromosome() -> None:
+    factory, log = _factory([(1,)])  # fake returns a hit on the first LD table queried
+    assert LocuscompareRepository(factory).variant_chrom(62062621) == 1
+    assert "tkg_p3v5a_ld_chr1_EUR" in log[0][0]
+    assert log[0][1] == ("rs62062621",)
+
+
+def test_locuscompare_variant_chrom_none_scans_all_autosomes() -> None:
+    factory, log = _factory([])  # no hit anywhere
+    assert LocuscompareRepository(factory).variant_chrom(1) is None
+    assert len(log) == 22  # chr1..chr22
+
+
+def test_locuscompare_eqtls_for_variant_uses_chrom_and_rsid() -> None:
+    factory, log = _factory([(141510, 62062621, 17, 7757304, "3e-4", "0.03", "0.05")])
+    hits = LocuscompareRepository(factory).eqtls_for_variant(17, 62062621, [1, 2])
+    assert [a.dataset_id for a in hits] == [1, 2]
+    assert all(params == (17, 62062621) for _, params in log)
+    assert "chrom = %s AND rs_id = %s" in log[0][0]
+
+
+def test_locuscompare_eqtls_for_variant_empty_datasets() -> None:
+    factory, log = _factory([])
+    assert LocuscompareRepository(factory).eqtls_for_variant(1, 1, []) == []
+    assert log == []
+
+
+def test_locuscompare_gene_by_id_reconstructs_ensg() -> None:
+    factory, log = _factory([_GENCODE])
+    gene = LocuscompareRepository(factory).gene_by_id(141510)
+    assert gene is not None and gene.symbol == "TP53"
+    assert log[0][1] == ("ENSG00000141510%",)  # 141510 -> zero-padded ENSG
+
+
+def test_locuscompare_gene_by_id_not_found() -> None:
+    factory, _ = _factory([])
+    assert LocuscompareRepository(factory).gene_by_id(1) is None
