@@ -1,6 +1,6 @@
 # Design — Gene-page visualizations: LD-colored regional plot + tissue body map
 
-- **Status:** Accepted design; **Phase A (regional plot) is the first implementation PR.**
+- **Status:** Accepted; **reconciled with Liu Fei's mockup (2026-07-07)**. Backend shipped (#25); frontend = #27.
 - **Diátaxis:** Design/Explanation (a spec — the *how*, with the *why*).
 - **Related:** [gene page](../../src/locusview/web.py) · [repository](../../src/locusview/repository.py) ·
   [ADR-0008 (shared DB)](../adr/0008-store-qtl-in-locuscompare2-database.md) ·
@@ -25,6 +25,25 @@ Make the gene page show *where and how strong* a gene's eQTLs are:
 | Body-map data | **eQTL** (only data we have); endpoints take a `qtl_type` param so sQTL slots in later. |
 | DB access | **sync pymysql** via the existing `LocuscompareRepository` connection factory (no async engine). |
 | Anatomogram asset | **EBI Expression Atlas** SVGs (UBERON-keyed; **CC-BY 4.0** → visible credit required). |
+
+## Design review — reconciled with Liu Fei's mockup (2026-07-07)
+Liu Fei (UI/UX) delivered a full-app mockup:
+[`mockups/LocusView_Standalone_v1.html`](mockups/LocusView_Standalone_v1.html) — a design-tool export,
+the **visual source of truth** for the frontend (a reference, not drop-in code). Reconciliation:
+
+| Question | Decision |
+|---|---|
+| Plot rendering | **Plotly.js, styled to match** (reuse the shipped #25 backend + Plotly hover/click). Her mockup hand-draws on `<canvas>`; we adopt the *look*, not the canvas. |
+| Palette | Her **blue/slate** system — accent `#2563eb`, text `#1e293b`/`#64748b`, surfaces `#f8fafc`/`#e2e8f0`. |
+| Lead-variant marker | **Orange `#f97316`** ("marks the variant in orange"), replacing purple `#9632B8` in `LD_COLORS`. |
+| First frontend PR (#27) scope | **Gene-page "Locus View" only**; the rest split into follow-up issues (below). |
+
+**Adopted from the mockup:** LD r² coloring (kept); Gene/Region/Variant input modes (already our
+parser); tissue/context + dataset selectors; click-to-pin lead; provenance/citations intent.
+
+**Deferred to their own issues (not in #27):** the tabbed **app shell** (Home / Data Browser / News);
+the **Cross-Dataset** comparison view; the **contribution** flow (Phase 5, ADR-0007); the
+**citations/references** panel.
 
 ## Data model (verified against the live DB)
 - Association per gene×tissue: shard `eqtl_snp_{dataset_id}` → `(rs_id int, chrom, position, pvalue,
@@ -73,7 +92,7 @@ Bins broken at 0.2/0.4/0.6/0.8 (current LocusZoom.js defaults):
 |---|---|---|---|---|
 | 0.8–1.0 | `#DB3D11` | | 0.2–0.4 | `#26BCE1` |
 | 0.6–0.8 | `#F8C32A` | | 0.0–0.2 | `#463699` |
-| 0.4–0.6 | `#6EFE68` | | lead | `#9632B8` (diamond) |
+| 0.4–0.6 | `#6EFE68` | | lead | `#f97316` orange (diamond, per Liu Fei) |
 |  |  | | null (no LD) | `#AAAAAA` |
 
 Plot extras: horizontal genome-wide-significance line at −log₁₀(5e−8); tooltips show
