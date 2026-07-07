@@ -28,7 +28,7 @@ Two locusview principals, least privilege each:
 
 | Principal | Used by | Privilege | When |
 |---|---|---|---|
-| `locusview_ro` | Public read/serving path | `SELECT` only, on QTL tables (**not** `user`/PII) | Phase 1 |
+| `locuscompare` | Public read/serving path | `SELECT` only, PII (`user`) denied | Phase 1 — **provisioned** |
 | `locusview_rw` | Contribution ingest only | `SELECT` + `INSERT`/`UPDATE` on an explicit, scoped table set | Phase 5 (created but unused/disabled until then) |
 
 locusview must **never** use the backend's `root` account (`db_config.py` ships a hardcoded shared
@@ -37,10 +37,30 @@ not reproduced here).
 
 ---
 
-## 0. Shared test/demo read-only account (verified 2026-07-02)
+## 0. Read-only serving account — `locuscompare` (provisioned 2026-07-07)
 
-A **non-production, read-only** account for development and the CI contract tests. Use it to explore
-the schema and run the read-path examples — **never** for production serving.
+**This is the account locusview uses.** A dedicated, named, read-only account on `colotool`, provided
+by the locuscompare2 owners (Junbin). Its password lives in the deployment secret store (and, locally,
+in the **gitignored `.env`**) — **never committed**. Wire it via the `LOCUSCOMPARE2_DB_*` env vars
+(§4) and the app picks it up automatically (`get_db_settings()` reads `.env`).
+
+| Field | Value |
+|---|---|
+| Host | `54.254.162.217` (= `mysql.locuscompare2.com`) |
+| Port | `31987` (Kubernetes NodePort) |
+| Database | `colotool` |
+| User | `locuscompare` |
+| Password | *(secret store / local `.env` — not in this repo)* |
+
+**Verified read-only + PII-safe (2026-07-07):** `SHOW GRANTS` → 990 grants, all `SELECT`/`USAGE`,
+**no write/DDL**; the `user` PII table is **denied** (`SELECT … FROM user` → `ERROR 1142`) and is not
+in the grant set. This account fulfils the read-only serving role designed in §2.
+
+## 0b. Public demo login (`locusview_test`) — exploration only, superseded
+
+A deliberately public, low-value read-only login (password = username), kept for quick schema
+exploration and offline examples. **Superseded by `locuscompare` for anything real** — do not use it
+for serving. Same safety profile (read-only; `user` PII denied, verified 2026-07-02).
 
 | Field | Value |
 |---|---|
@@ -101,6 +121,9 @@ is Option B in §2.
 - Confirm the server enforces TLS for non-local connections (see §5).
 
 ## 2. Create the read-only serving role
+
+> The provisioned account (`locuscompare`, §0) already fulfils this role. The recipes below are the
+> reference for **how** a least-privilege reader is scoped (and for minting a replica/prod one).
 
 Table names include **dynamic shards** (`eqtl_snp_{id}`, `gwas_snp_{id}`,
 `colocalization_gene_result_{id}`), so per-table grants are impractical — new datasets would silently
@@ -169,17 +192,17 @@ Configuration lives in the environment (12-Factor), never in source — matching
 `.env.example`. The reader uses the same driver family as the backend (`PyMySQL`); the SQLAlchemy URL:
 
 ```
-mysql+pymysql://locusview_ro:<secret>@<host>:<port>/colotool?charset=utf8mb4
+mysql+pymysql://locuscompare:<secret>@<host>:<port>/colotool?charset=utf8mb4
 ```
 
 Environment variables (added to `.env.example`):
 
 ```bash
-LOCUSCOMPARE2_DB_HOST=            # authoritative host (NOT a laptop)
-LOCUSCOMPARE2_DB_PORT=3306
+LOCUSCOMPARE2_DB_HOST=54.254.162.217   # provisioned endpoint (swap for a replica/prod host if used)
+LOCUSCOMPARE2_DB_PORT=31987            # Kubernetes NodePort
 LOCUSCOMPARE2_DB_NAME=colotool
-LOCUSCOMPARE2_DB_USER=locusview_ro
-LOCUSCOMPARE2_DB_PASSWORD=        # injected by the secret store; never committed
+LOCUSCOMPARE2_DB_USER=locuscompare     # read-only serving account (§0)
+LOCUSCOMPARE2_DB_PASSWORD=            # secret store / local .env; never committed
 LOCUSCOMPARE2_DB_SSL_MODE=REQUIRED
 ```
 
