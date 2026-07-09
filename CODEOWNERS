@@ -1,32 +1,22 @@
 # Code owners — GitHub auto-requests a review from these owners on matching PRs.
 # This is the enforcement behind "agents write, humans merge" (ADR-0005): code and
-# tests must be reviewed by a code owner. See docs/explanation/pull-requests-and-branch-protection.md
+# tests must be reviewed by an engineer. See docs/explanation/pull-requests-and-branch-protection.md
 #
-# Code owners (all have write access):
-#   @boxiangliu         — Boxiang Liu (lead)
-#   @gaojunbin          — Junbin Gao
-#   @GhostAnderson      — Laurentius
-#   @liufei-f           — Liu Fei
-#   @MickYang2333       — YANG Chen
-#   @wenjing-gakkilove  — Wenjing
+# Engineers / code owners (all have write access):
+#   @boxiangliu     — Boxiang Liu (lead)
+#   @gaojunbin      — Junbin Gao
+#   @GhostAnderson  — Laurentius
 #
 # NOTE: a code owner is only effective if they have WRITE access to the repo.
-# Any one code-owner approval satisfies branch protection.
 
 # Code and tests.
-/src/        @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
-/tests/      @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
+/src/        @boxiangliu @gaojunbin @GhostAnderson
+/tests/      @boxiangliu @gaojunbin @GhostAnderson
 
 # CI, containers, and guardrails.
-/.github/    @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
-/Dockerfile  @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
-/.pre-commit-config.yaml  @boxiangliu @gaojunbin @GhostAnderson @liufei-f @MickYang2333 @wenjing-gakkilove
-
-# UI / design surfaces — owned by the UI/UX designer (Liu Fei). These come AFTER
-# /src/ above so they take precedence for these paths (CODEOWNERS = last match wins),
-# making @liufei-f the required reviewer for design docs and the web templates.
-/docs/design/              @liufei-f
-/src/locusview/templates/  @liufei-f
+/.github/    @boxiangliu @gaojunbin @GhostAnderson
+/Dockerfile  @boxiangliu @gaojunbin @GhostAnderson
+/.pre-commit-config.yaml  @boxiangliu @gaojunbin @GhostAnderson
 
 # Product, process, and course docs can be reviewed by anyone on the team;
 # no CODEOWNERS entry means the default reviewers apply.

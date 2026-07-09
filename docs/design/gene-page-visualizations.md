@@ -91,9 +91,17 @@ Bins broken at 0.2/0.4/0.6/0.8 (current LocusZoom.js defaults):
 | r² | color | | r² | color |
 |---|---|---|---|---|
 | 0.8–1.0 | `#DB3D11` | | 0.2–0.4 | `#26BCE1` |
-| 0.6–0.8 | `#F8C32A` | | 0.0–0.2 | `#463699` |
+| 0.6–0.8 | `#F8C32A` | | **< 0.2 / not in panel** | `#463699` |
 | 0.4–0.6 | `#6EFE68` | | lead | `#f97316` orange (diamond, per Liu Fei) |
-|  |  | | null (no LD) | `#AAAAAA` |
+|  |  | | no rsID | `#AAAAAA` |
+
+> **The 0.2 floor (corrected 2026-07-07, review by @gaojunbin).** The `tkg_p3v5a_ld_*` tables store
+> only pairs with **r² ≥ 0.2** — PLINK's `--ld-window-r2` default. Verified: `MIN(R2) = 0.2` on
+> chr17/chr22 EUR, chr22 AFR, chr21 EAS. So a variant missing from an LD lookup is **not** "no data";
+> its r² is simply *below the floor*. Colouring those grey painted ~99.7 % of a real locus grey and
+> made the lowest bin unreachable. Missing-but-identifiable variants therefore take the **lowest bin**
+> (labelled `< 0.2 / not in panel`, which also absorbs variants genuinely absent from the panel);
+> **grey is reserved for variants with no rsID**, where LD cannot be looked up at all.
 
 Plot extras: horizontal genome-wide-significance line at −log₁₀(5e−8); tooltips show
 `rsID · chr:pos · p · β (direction not interpretable)`; a **population selector** {AFR,AMR,EAS,EUR,SAS}
@@ -124,9 +132,10 @@ SELECT partner, MAX(R2) AS r2 FROM (
 ) t GROUP BY partner;                    -- %s bound = 'rs{lead_int}'
 ```
 Parse partners with `^rs\d+$` → `int(partner[2:])`; skip non-numeric IDs; clamp r² to [0,1]; force
-lead r²=1.0. Region variants absent from 1000G → omitted → client renders grey (**NA ≠ 0**). If the
-**lead itself** is absent, flag it so the UI warns rather than greying everything. Normalize chrom
-(`23`→`X`). `ld_r2` wrapped in a sync LRU cache keyed by `(chrom, pop, lead)`.
+lead r²=1.0. Region variants omitted from the result are **below the 0.2 floor** (see the note above),
+so the client renders them in the **lowest bin**, not grey — grey means *no rsID*. If the **lead
+itself** is absent, flag it so the UI warns. Normalize chrom (`23`→`X`). `ld_r2` wrapped in a sync
+LRU cache keyed by `(chrom, pop, lead)`.
 
 ### Testing (hermetic)
 - Pure helpers (`_ld_table`, `r2_bin`, rsID parsing) unit-tested.
