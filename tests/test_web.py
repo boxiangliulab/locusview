@@ -89,10 +89,13 @@ def _plot_client() -> TestClient:
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7661779, 7687550, "-")],
         associations=[
             EqtlAssociation(8, 141510, 111, 17, 7670000, 1e-30, 0.5, 0.05),  # lead (min p)
-            EqtlAssociation(8, 141510, 222, 17, 7671000, 1e-3, 0.1, 0.05),
-            EqtlAssociation(8, 141510, 333, 17, 7672000, 0.5, 0.01, 0.05),
+            EqtlAssociation(8, 141510, 222, 17, 7671000, 1e-3, 0.1, 0.05),  # r²=0.9
+            EqtlAssociation(8, 141510, 333, 17, 7672000, 0.5, 0.01, 0.05),  # r²=0.3
+            EqtlAssociation(8, 141510, 444, 17, 7673000, 0.4, 0.02, 0.05),  # absent from LD panel
+            EqtlAssociation(8, 141510, None, 17, 7674000, 0.6, 0.02, 0.05),  # no rsID at all
         ],
-        ld={("17", 111, "EUR"): {222: 0.9, 333: 0.1}},
+        # A real panel never returns r² < 0.2 (the PLINK floor); nor does this fake.
+        ld={("17", 111, "EUR"): {222: 0.9, 333: 0.3}},
     )
     return TestClient(create_app(repository=repo))
 
@@ -106,8 +109,20 @@ def test_regional_endpoint_attaches_r2_and_lead() -> None:
     assert body["lead"]["rs_id"] == 111
     by_rs = {v["rs_id"]: v for v in body["variants"]}
     assert by_rs[111]["is_lead"] is True and by_rs[111]["r2"] == 1.0
-    assert by_rs[222]["r2"] == 0.9 and by_rs[333]["r2"] == 0.1
+    assert by_rs[222]["r2"] == 0.9 and by_rs[333]["r2"] == 0.3
     assert by_rs[111]["color"] == "#f97316"  # lead diamond color (orange, per Liu Fei)
+
+
+def test_regional_missing_ld_is_low_bin_not_grey() -> None:
+    """A variant absent from the LD panel is *below the 0.2 floor*, not "no data".
+
+    Regression test for the review finding that ~99.7% of a real locus rendered grey.
+    """
+    body = _plot_client().get("/api/gene/TP53/regional", params={"tissue": 8}).json()
+    by_rs = {v["rs_id"]: v for v in body["variants"]}
+    assert by_rs[444]["r2"] is None
+    assert by_rs[444]["color"] == "#463699"  # lowest bin (< 0.2) — NOT grey
+    assert by_rs[None]["color"] == "#AAAAAA"  # no rsID -> LD genuinely unknown
 
 
 def test_regional_unknown_gene_is_404() -> None:

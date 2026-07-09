@@ -155,6 +155,8 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
             if log_p is None:
                 continue
             is_lead = lead is not None and a.rs_id == lead.rs_id and a.position == lead.position
+            has_rsid = a.rs_id is not None
+            # r2 None => the panel returned no pair => r² is below the 0.2 floor, not "no data".
             r2 = r2map.get(a.rs_id) if a.rs_id is not None else None
             variants.append(
                 {
@@ -167,7 +169,7 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
                     "se": a.se,
                     "r2": r2,
                     "is_lead": is_lead,
-                    "color": r2_color(r2, is_lead=is_lead),
+                    "color": r2_color(r2, is_lead=is_lead, has_rsid=has_rsid),
                 }
             )
             positions.append(a.position)
