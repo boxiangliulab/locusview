@@ -15,12 +15,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from locusview import __version__
 from locusview.config import get_db_settings, get_settings
 from locusview.repository import (
+    CHROMS,
+    POPULATIONS,
     Dataset,
     FakeQtlRepository,
     Gene,
@@ -29,6 +31,7 @@ from locusview.repository import (
     pymysql_connection_factory,
 )
 from locusview.search import QueryKind, parse_query
+from locusview.viz import ld_legend, neg_log10_p, r2_color
 
 _TEMPLATES = Environment(
     loader=FileSystemLoader(str(Path(__file__).parent / "templates")),
@@ -120,6 +123,7 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
             "gene.html",
             gene=gene,
             rows=rows,
+            datasets=datasets,
             n_tissues=len(datasets),
             total_tissues=len(all_datasets),
         )
@@ -171,6 +175,107 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
             rows=rows,
             n_tissues=len(datasets),
             total_tissues=len(all_datasets),
+        )
+
+    @app.get("/api/gene/{key}/regional")
+    def regional(key: str, tissue: int, population: str = "EUR") -> Response:
+        """Association points for one gene × one tissue, with r² to the default (min-p) lead."""
+        gene = repo.resolve_gene(key)
+        if gene is None:
+            return JSONResponse({"error": f"gene not found: {key}"}, status_code=404)
+        if population not in POPULATIONS:
+            return JSONResponse({"error": f"unknown population: {population}"}, status_code=400)
+        dataset = next((d for d in repo.datasets() if d.id == tissue), None)
+        if dataset is None:
+            return JSONResponse({"error": f"unknown tissue/dataset: {tissue}"}, status_code=404)
+
+        cis = repo.cis_associations(gene.gene_id, tissue)
+        lead = None
+        for a in cis:
+            if a.pvalue is not None and (
+                lead is None or lead.pvalue is None or a.pvalue < lead.pvalue
+            ):
+                lead = a
+        if lead is None and cis:
+            lead = cis[0]
+
+        r2map: dict[int, float] = {}
+        reference_present = False
+        if lead is not None and lead.rs_id is not None:
+            r2map = repo.ld_r2(str(lead.chrom), lead.rs_id, population)
+            reference_present = bool(r2map)
+            r2map[lead.rs_id] = 1.0
+
+        variants: list[dict[str, object]] = []
+        positions: list[int] = []
+        for a in cis:
+            log_p = neg_log10_p(a.pvalue)
+            if log_p is None:
+                continue
+            is_lead = lead is not None and a.rs_id == lead.rs_id and a.position == lead.position
+            has_rsid = a.rs_id is not None
+            # r2 None => the panel returned no pair => r² is below the 0.2 floor, not "no data".
+            r2 = r2map.get(a.rs_id) if a.rs_id is not None else None
+            variants.append(
+                {
+                    "rs_id": a.rs_id,
+                    "chrom": str(a.chrom),
+                    "position": a.position,
+                    "pvalue": a.pvalue,
+                    "log_pvalue": log_p,
+                    "beta": a.beta,
+                    "se": a.se,
+                    "r2": r2,
+                    "is_lead": is_lead,
+                    "color": r2_color(r2, is_lead=is_lead, has_rsid=has_rsid),
+                }
+            )
+            positions.append(a.position)
+
+        return JSONResponse(
+            {
+                "gene": gene.symbol,
+                "gene_id": gene.gene_id,
+                "tissue": dataset.tissue,
+                "dataset_id": tissue,
+                "build": "GRCh38",
+                "population": population,
+                "reference_present_in_1000g": reference_present,
+                "region": {
+                    "chrom": str(lead.chrom) if lead else gene.chrom,
+                    "start": min(positions) if positions else 0,
+                    "end": max(positions) if positions else 0,
+                },
+                "lead": None
+                if lead is None
+                else {
+                    "rs_id": lead.rs_id,
+                    "position": lead.position,
+                    "log_pvalue": neg_log10_p(lead.pvalue),
+                },
+                "ld_legend": ld_legend(),
+                "variants": variants,
+            }
+        )
+
+    @app.get("/api/ld")
+    def ld(chrom: str, lead: int, population: str = "EUR") -> Response:
+        """r² of every variant to the given lead — for re-coloring on a user-clicked lead."""
+        if chrom not in CHROMS:
+            return JSONResponse({"error": f"unknown chromosome: {chrom}"}, status_code=400)
+        if population not in POPULATIONS:
+            return JSONResponse({"error": f"unknown population: {population}"}, status_code=400)
+        r2map = repo.ld_r2(chrom, lead, population)
+        reference_present = bool(r2map)
+        r2map[lead] = 1.0
+        return JSONResponse(
+            {
+                "lead_rs_id": lead,
+                "chrom": chrom,
+                "population": population,
+                "reference_present_in_1000g": reference_present,
+                "r2": {str(k): v for k, v in r2map.items()},
+            }
         )
 
     return app

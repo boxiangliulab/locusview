@@ -92,6 +92,19 @@ class QtlRepository(Protocol):
 
     def gene_by_id(self, gene_id: int) -> Gene | None:
         """Resolve a :class:`Gene` from its integer id (reverse of :meth:`resolve_gene`)."""
+
+    def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
+        """ALL cis variants for one gene in ONE tissue (the regional-plot set, ~thousands)."""
+        ...
+
+    def ld_r2(self, chrom: str, lead_rs_id: int, population: str) -> dict[int, float]:
+        """r² of every partner variant to the lead, from the 1000G LD panel (excludes the lead)."""
+        ...
+
+    def tissues_with_signal(
+        self, gene_id: int, p_threshold: float = 1e-5
+    ) -> list[tuple[int, str, float]]:
+        """(dataset_id, tissue, min_pvalue) for tissues where the gene has a significant eQTL."""
         ...
 
 
@@ -104,6 +117,20 @@ _ENSG = re.compile(r"^ENSG0*(\d+)$", re.IGNORECASE)
 _GENCODE_TABLE = "gencode_v26_hg38"  # GTEx v8 uses GENCODE v26 (hg38)
 # 1000G phase-3 variant reference: rsid -> chr/pos/ref/alt + per-population AF. Indexed on `rsid`.
 _VARIANT_REF_TABLE = "tkg_p3v5a_hg38"
+
+_RS_PARTNER = re.compile(r"^rs(\d+)$")
+CHROMS = frozenset([*(str(i) for i in range(1, 23)), "X"])
+POPULATIONS = frozenset({"AFR", "AMR", "EAS", "EUR", "SAS"})
+
+
+def _ld_table(chrom: str, population: str) -> str:
+    """Return the 1000G LD table name for a chromosome + super-population (enum-validated,
+    so the interpolated table name is safe)."""
+    if chrom not in CHROMS:
+        raise ValueError(f"unknown chromosome: {chrom!r}")
+    if population not in POPULATIONS:
+        raise ValueError(f"unknown population: {population!r}")
+    return f"tkg_p3v5a_ld_chr{chrom}_{population}"
 
 
 def ensembl_number(ensembl_id: str) -> int:
@@ -184,10 +211,12 @@ class FakeQtlRepository:
         datasets: Sequence[Dataset] | None = None,
         associations: Sequence[EqtlAssociation] | None = None,
         genes: Sequence[Gene] | None = None,
+        ld: dict[tuple[str, int, str], dict[int, float]] | None = None,
     ) -> None:
         self._datasets = list(datasets or ())
         self._associations = list(associations or ())
         self._genes = list(genes or ())
+        self._ld = dict(ld or {})
 
     def datasets(self) -> list[Dataset]:
         return list(self._datasets)
@@ -225,6 +254,26 @@ class FakeQtlRepository:
 
     def gene_by_id(self, gene_id: int) -> Gene | None:
         return next((g for g in self._genes if g.gene_id == gene_id), None)
+
+    def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
+        return [
+            a for a in self._associations if a.gene_id == gene_id and a.dataset_id == dataset_id
+        ]
+
+    def ld_r2(self, chrom: str, lead_rs_id: int, population: str) -> dict[int, float]:
+        return dict(self._ld.get((chrom, lead_rs_id, population), {}))
+
+    def tissues_with_signal(
+        self, gene_id: int, p_threshold: float = 1e-5
+    ) -> list[tuple[int, str, float]]:
+        name = {d.id: d.tissue for d in self._datasets}
+        best: dict[int, float] = {}
+        for a in self._associations:
+            if a.gene_id == gene_id and a.pvalue is not None and a.pvalue < p_threshold:
+                best[a.dataset_id] = min(best.get(a.dataset_id, 1.0), a.pvalue)
+        return sorted(
+            ((ds, name.get(ds, str(ds)), p) for ds, p in best.items()), key=lambda t: t[2]
+        )
 
 
 # ── Real (locuscompare2 MySQL) ──────────────────────────────────────────────
@@ -333,6 +382,53 @@ class LocuscompareRepository:
             (f"{ensg}%",),
         )
         return _row_to_gene(rows[0]) if rows else None
+
+    def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
+        table = _shard_table(dataset_id)
+        rows = self._query(
+            f"SELECT gene_id, rs_id, chrom, position, pvalue, beta, se "
+            f"FROM {table} WHERE gene_id = %s",
+            (gene_id,),
+        )
+        return [_row_to_eqtl(dataset_id, r) for r in rows]
+
+    def ld_r2(self, chrom: str, lead_rs_id: int, population: str) -> dict[int, float]:
+        table = _ld_table(chrom, population)
+        lead = f"rs{lead_rs_id}"
+        # LD pairs are stored one-directional, so union both directions and dedupe with MAX.
+        rows = self._query(
+            f"SELECT partner, MAX(R2) AS r2 FROM ("
+            f" SELECT SNP_B AS partner, R2 FROM {table} WHERE SNP_A = %s"
+            f" UNION ALL"
+            f" SELECT SNP_A AS partner, R2 FROM {table} WHERE SNP_B = %s"
+            f") u GROUP BY partner",
+            (lead, lead),
+        )
+        out: dict[int, float] = {}
+        for partner, r2 in rows:
+            m = _RS_PARTNER.match(str(partner))
+            if m is None or r2 is None:  # skip non-rs ids (esv/ss/…) and NULLs
+                continue
+            out[int(m.group(1))] = max(0.0, min(1.0, float(r2)))
+        out.pop(lead_rs_id, None)  # exclude self; the caller sets the lead's own r² = 1.0
+        return out
+
+    def tissues_with_signal(
+        self, gene_id: int, p_threshold: float = 1e-5
+    ) -> list[tuple[int, str, float]]:
+        # Fan-out across dataset shards. NOTE: O(#tissues) queries — a candidate for a
+        # per-gene summary table (schema-change-coordination) if it gets hot.
+        out: list[tuple[int, str, float]] = []
+        for dataset in self.datasets():
+            table = _shard_table(dataset.id)
+            # pvalue is stored as text; `+ 0.0` forces numeric MIN (handles decimal + scientific).
+            rows = self._query(
+                f"SELECT MIN(pvalue + 0.0) FROM {table} WHERE gene_id = %s", (gene_id,)
+            )
+            min_p = rows[0][0] if rows else None
+            if min_p is not None and float(min_p) < p_threshold:
+                out.append((dataset.id, dataset.tissue, float(min_p)))
+        return sorted(out, key=lambda t: t[2])
 
 
 def pymysql_connection_factory() -> ConnectionFactory:
