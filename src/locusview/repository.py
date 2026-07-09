@@ -77,7 +77,12 @@ class QtlRepository(Protocol):
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
     ) -> list[EqtlAssociation]:
-        """Return eQTL associations for ``gene_id`` within the given datasets."""
+        """Return eQTL associations for ``gene_id`` within the given datasets.
+
+        ``limit`` caps rows **per dataset**, not in total — the query fans out one LIMIT-ed
+        request per shard. Asking for 25 datasets with ``limit=50`` can return up to 1250 rows.
+        Results are grouped by dataset, in the order of ``dataset_ids``.
+        """
         ...
 
     def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
@@ -217,9 +222,15 @@ class FakeQtlRepository:
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
     ) -> list[EqtlAssociation]:
-        wanted = set(dataset_ids)
-        hits = [a for a in self._associations if a.gene_id == gene_id and a.dataset_id in wanted]
-        return hits[:limit]
+        # Mirror the real fan-out: one LIMIT-ed pass per dataset, grouped by dataset. Slicing the
+        # *combined* list would cap the total instead — something the real query never does.
+        out: list[EqtlAssociation] = []
+        for dataset_id in dataset_ids:
+            hits = [
+                a for a in self._associations if a.gene_id == gene_id and a.dataset_id == dataset_id
+            ]
+            out.extend(hits[:limit])
+        return out
 
     def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
         return [

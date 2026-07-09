@@ -161,6 +161,28 @@ def test_locuscompare_eqtls_for_gene_empty_datasets() -> None:
     assert log == []  # no query issued when there are no datasets
 
 
+def test_eqtls_for_gene_limit_is_per_dataset_in_both_implementations() -> None:
+    """``limit`` caps rows **per dataset**, not in total — and the fake must model that.
+
+    The fake exists so a hermetic test predicts production. While it capped the *total* and the
+    real query capped *per shard*, the download endpoint quietly emitted 1250 rows where the tests
+    saw 50. This contract test keeps the two honest.
+    """
+    # Fake: three associations for the gene in each of two datasets.
+    associations = [
+        EqtlAssociation(ds, 7, i, 1, i, 0.01, 0.1, 0.02) for ds in (1, 2) for i in range(3)
+    ]
+    fake = FakeQtlRepository(associations=associations).eqtls_for_gene(7, [1, 2], limit=2)
+    assert len(fake) == 4  # 2 per dataset, NOT 2 in total
+    assert [a.dataset_id for a in fake] == [1, 1, 2, 2]  # grouped by dataset, in order
+
+    # Real: one LIMIT-ed query per shard, with `limit` bound per shard.
+    factory, log = _factory([(7, 1, 1, 1, "0.01", "0.1", "0.02")] * 2)
+    real = LocuscompareRepository(factory).eqtls_for_gene(7, [1, 2], limit=2)
+    assert len(real) == 4  # 2 rows from each of the 2 shards
+    assert all(params == (7, 2) for _, params in log)  # the LIMIT is bound per shard
+
+
 def test_pymysql_connection_factory_returns_callable() -> None:
     # Builds the factory (does not connect — that needs a live DB).
     assert callable(pymysql_connection_factory())
