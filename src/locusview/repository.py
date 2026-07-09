@@ -102,6 +102,8 @@ ConnectionFactory = Callable[[], Any]
 
 _ENSG = re.compile(r"^ENSG0*(\d+)$", re.IGNORECASE)
 _GENCODE_TABLE = "gencode_v26_hg38"  # GTEx v8 uses GENCODE v26 (hg38)
+# 1000G phase-3 variant reference: rsid -> chr/pos/ref/alt + per-population AF. Indexed on `rsid`.
+_VARIANT_REF_TABLE = "tkg_p3v5a_hg38"
 
 
 def ensembl_number(ensembl_id: str) -> int:
@@ -287,15 +289,19 @@ class LocuscompareRepository:
             conn.close()
 
     def variant_chrom(self, rs_id: int) -> int | None:
-        # The shards have no standalone rs_id index, but the 1000G LD tables are indexed on SNP_A.
-        # Scan autosomes (the eQTL shards are autosomal) for the first chromosome carrying the rsID.
-        snp = f"rs{rs_id}"
-        for chrom in range(1, 23):
-            if self._query(
-                f"SELECT 1 FROM tkg_p3v5a_ld_chr{chrom}_EUR WHERE SNP_A = %s LIMIT 1", (snp,)
-            ):
-                return chrom
-        return None
+        """Resolve a variant's chromosome from the 1000G variant reference.
+
+        ``tkg_p3v5a_hg38`` (75M rows) is indexed on ``rsid``, so this is a single ~15 ms seek, and
+        it covers *every* 1000G variant — not only those appearing in an LD **pair**. Returns
+        ``None`` for unknown rsIDs and for non-autosomes (the eQTL shards are autosomal).
+        """
+        rows = self._query(
+            f"SELECT chr FROM {_VARIANT_REF_TABLE} WHERE rsid = %s LIMIT 1", (f"rs{rs_id}",)
+        )
+        if not rows:
+            return None
+        chrom = str(rows[0][0])
+        return int(chrom) if chrom.isdigit() and 1 <= int(chrom) <= 22 else None
 
     def eqtls_for_variant(
         self, chrom: int, rs_id: int, dataset_ids: Sequence[int]

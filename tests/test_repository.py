@@ -243,17 +243,21 @@ def test_fake_gene_by_id() -> None:
     assert repo.gene_by_id(999) is None
 
 
-def test_locuscompare_variant_chrom_finds_chromosome() -> None:
-    factory, log = _factory([(1,)])  # fake returns a hit on the first LD table queried
-    assert LocuscompareRepository(factory).variant_chrom(62062621) == 1
-    assert "tkg_p3v5a_ld_chr1_EUR" in log[0][0]
+def test_locuscompare_variant_chrom_uses_indexed_variant_reference() -> None:
+    factory, log = _factory([("17",)])
+    assert LocuscompareRepository(factory).variant_chrom(62062621) == 17
+    assert len(log) == 1  # ONE indexed seek, not a scan across 22 LD tables
+    assert "tkg_p3v5a_hg38" in log[0][0] and "rsid = %s" in log[0][0]
     assert log[0][1] == ("rs62062621",)
 
 
-def test_locuscompare_variant_chrom_none_scans_all_autosomes() -> None:
-    factory, log = _factory([])  # no hit anywhere
-    assert LocuscompareRepository(factory).variant_chrom(1) is None
-    assert len(log) == 22  # chr1..chr22
+def test_locuscompare_variant_chrom_none_for_unknown_or_non_autosome() -> None:
+    factory, _ = _factory([])
+    assert LocuscompareRepository(factory).variant_chrom(1) is None  # unknown rsID
+    factory, _ = _factory([("X",)])
+    assert (
+        LocuscompareRepository(factory).variant_chrom(1) is None
+    )  # non-autosome (eQTL is autosomal)
 
 
 def test_locuscompare_eqtls_for_variant_uses_chrom_and_rsid() -> None:
