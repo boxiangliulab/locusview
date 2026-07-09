@@ -80,6 +80,19 @@ class QtlRepository(Protocol):
         """Return eQTL associations for ``gene_id`` within the given datasets."""
         ...
 
+    def variant_chrom(self, rs_id: int) -> int | None:
+        """Resolve a variant's chromosome (needed to use the ``(chrom, rs_id)`` index), or None."""
+        ...
+
+    def eqtls_for_variant(
+        self, chrom: int, rs_id: int, dataset_ids: Sequence[int]
+    ) -> list[EqtlAssociation]:
+        """Reverse lookup: every association for one variant across the given datasets."""
+        ...
+
+    def gene_by_id(self, gene_id: int) -> Gene | None:
+        """Resolve a :class:`Gene` from its integer id (reverse of :meth:`resolve_gene`)."""
+
     def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
         """ALL cis variants for one gene in ONE tissue (the regional-plot set, ~thousands)."""
         ...
@@ -102,6 +115,8 @@ ConnectionFactory = Callable[[], Any]
 
 _ENSG = re.compile(r"^ENSG0*(\d+)$", re.IGNORECASE)
 _GENCODE_TABLE = "gencode_v26_hg38"  # GTEx v8 uses GENCODE v26 (hg38)
+# 1000G phase-3 variant reference: rsid -> chr/pos/ref/alt + per-population AF. Indexed on `rsid`.
+_VARIANT_REF_TABLE = "tkg_p3v5a_hg38"
 
 _RS_PARTNER = re.compile(r"^rs(\d+)$")
 CHROMS = frozenset([*(str(i) for i in range(1, 23)), "X"])
@@ -221,6 +236,25 @@ class FakeQtlRepository:
         hits = [a for a in self._associations if a.gene_id == gene_id and a.dataset_id in wanted]
         return hits[:limit]
 
+    def variant_chrom(self, rs_id: int) -> int | None:
+        for a in self._associations:
+            if a.rs_id == rs_id:
+                return a.chrom
+        return None
+
+    def eqtls_for_variant(
+        self, chrom: int, rs_id: int, dataset_ids: Sequence[int]
+    ) -> list[EqtlAssociation]:
+        wanted = set(dataset_ids)
+        return [
+            a
+            for a in self._associations
+            if a.chrom == chrom and a.rs_id == rs_id and a.dataset_id in wanted
+        ]
+
+    def gene_by_id(self, gene_id: int) -> Gene | None:
+        return next((g for g in self._genes if g.gene_id == gene_id), None)
+
     def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
         return [
             a for a in self._associations if a.gene_id == gene_id and a.dataset_id == dataset_id
@@ -302,6 +336,52 @@ class LocuscompareRepository:
             return out
         finally:
             conn.close()
+
+    def variant_chrom(self, rs_id: int) -> int | None:
+        """Resolve a variant's chromosome from the 1000G variant reference.
+
+        ``tkg_p3v5a_hg38`` (75M rows) is indexed on ``rsid``, so this is a single ~15 ms seek, and
+        it covers *every* 1000G variant — not only those appearing in an LD **pair**. Returns
+        ``None`` for unknown rsIDs and for non-autosomes (the eQTL shards are autosomal).
+        """
+        rows = self._query(
+            f"SELECT chr FROM {_VARIANT_REF_TABLE} WHERE rsid = %s LIMIT 1", (f"rs{rs_id}",)
+        )
+        if not rows:
+            return None
+        chrom = str(rows[0][0])
+        return int(chrom) if chrom.isdigit() and 1 <= int(chrom) <= 22 else None
+
+    def eqtls_for_variant(
+        self, chrom: int, rs_id: int, dataset_ids: Sequence[int]
+    ) -> list[EqtlAssociation]:
+        if not dataset_ids:
+            return []
+        conn = self._connect()  # one connection for the whole fan-out
+        try:
+            out: list[EqtlAssociation] = []
+            for dataset_id in dataset_ids:
+                table = _shard_table(dataset_id)
+                # (chrom, rs_id) hits idx_eqtl_snp_join — a precise seek, ~100 rows not a full scan.
+                rows = self._run(
+                    conn,
+                    f"SELECT gene_id, rs_id, chrom, position, pvalue, beta, se "
+                    f"FROM {table} WHERE chrom = %s AND rs_id = %s",
+                    (chrom, rs_id),
+                )
+                out.extend(_row_to_eqtl(dataset_id, r) for r in rows)
+            return out
+        finally:
+            conn.close()
+
+    def gene_by_id(self, gene_id: int) -> Gene | None:
+        ensg = f"ENSG{gene_id:011d}"  # 141510 -> "ENSG00000141510"
+        rows = self._query(
+            f"SELECT gene_name, gene_id, chr, start, end, strand FROM {_GENCODE_TABLE} "
+            f"WHERE gene_id LIKE %s LIMIT 1",
+            (f"{ensg}%",),
+        )
+        return _row_to_gene(rows[0]) if rows else None
 
     def cis_associations(self, gene_id: int, dataset_id: int) -> list[EqtlAssociation]:
         table = _shard_table(dataset_id)

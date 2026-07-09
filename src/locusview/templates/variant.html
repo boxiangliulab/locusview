@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ rsid }} — locusview</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
+    .muted { color: #666; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid #eee; }
+    th { border-bottom: 2px solid #ccc; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <p><a href="/">&larr; locusview</a></p>
+  <h1>{{ rsid }}</h1>
+  <p class="muted">chromosome {{ chrom }} &middot; eQTL reverse lookup &mdash; the genes this variant associates with</p>
+
+  <h2>eQTLs</h2>
+  <p class="muted">
+    Showing associations from {{ n_tissues }} of {{ total_tissues }} datasets (bounded for the MVP).
+    Effect <em>direction</em> (the sign of &beta;) is not interpretable &mdash; the source shards store
+    no effect allele (<a href="https://github.com/boxiangliulab/locusview/issues/18">issue&nbsp;#18</a>).
+  </p>
+
+  {% if rows %}
+  <div class="wrap">
+  <table>
+    <thead>
+      <tr><th>Tissue</th><th>Gene</th><th>Ensembl</th><th>Position</th><th>p-value</th><th>&beta;</th><th>SE</th></tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.tissue }}</td>
+        <td><a href="/gene/{{ r.gene }}">{{ r.gene }}</a></td>
+        <td class="muted">{{ r.ensembl_id }}</td>
+        <td class="num">{{ r.position }}</td>
+        <td class="num">{{ '%.2e'|format(r.pvalue) if r.pvalue is not none else '' }}</td>
+        <td class="num">{{ r.beta if r.beta is not none else '' }}</td>
+        <td class="num">{{ r.se if r.se is not none else '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p>No eQTLs found for this variant in the queried datasets.</p>
+  {% endif %}
+
+  <p class="muted">locusview v{{ version }}</p>
+</body>
+</html>
