@@ -331,22 +331,21 @@ points at the new Postgres DB (`PostgresQtlRepository`) by default; the old
   Browser's sidebar/partials (currently only the regional-plot partial is shared).
 
 ## Open items / blockers
-- **Region-mode `/api/locus/multi-track` is still slow (~14s) for dense QTL datasets on a 1 Mb
-  window**, even after trimming the response payload (see the LD-parity entry above — that fixed
-  the 54 MB *response*, not this). The server still has to fetch and iterate all 300k+ raw rows
-  from `associations_in_region` to build `_group_by_phenotype`'s summary and find the track's
-  `lead`, even though only ~50 grouped rows end up in the response. Likely fix: compute the
-  per-phenotype lead/count as a SQL `GROUP BY` aggregate (DB-side) instead of fetching every row
-  into Python — not done yet, out of scope for the LD-parity fix that surfaced it.
-- **Gene page (`/gene/{name}`) times out for every gene — `eqtls_for_gene`'s dataset id 8
-  (Tenk10k-caQTL) query hangs (~8.5s, then the connection dies).** Found 2026-08 while verifying
-  an unrelated change (the regional-plot x-axis label, above) — confirmed live by timing
-  `eqtls_for_gene` per-dataset-id individually; every other dataset returns in <1.2s, id 8 alone
-  times out every time. Likely the same `p.gene_id::bigint = %s` cast pattern the module docstring
-  already warns about elsewhere, here against a caQTL dataset whose phenotype table's `gene_id` is
-  `NULL` on every row (see `cis_associations`'s docstring) — probably needs the same
-  resolve-bounded-keys-first treatment `cis_associations` already uses, or a `LIMIT`/timeout guard.
-  **Not fixed** — out of scope for the change in progress when found; needs its own investigation.
+- **Region-mode `/api/locus/multi-track` is slow-ish (~5.7s) for dense QTL datasets on a 1 Mb
+  window.** Was ~14s over the SSH tunnel; dropped to ~5.7s once the app connected directly (see
+  the connectivity note above), so the tunnel was a large part of it — but the underlying
+  inefficiency is real and remains: the server fetches and iterates all 300k+ raw rows from
+  `associations_in_region` just to build `_group_by_phenotype`'s summary and find the track's
+  `lead`, even though only ~50 grouped rows reach the response. Likely fix: compute the
+  per-phenotype lead/count as a SQL `GROUP BY` aggregate (DB-side) instead of in Python.
+- ~~**Gene page (`/gene/{name}`) times out for every gene** — `eqtls_for_gene`'s dataset id 8
+  (Tenk10k-caQTL) hangs (~8.5s, then the connection dies).~~ **Resolved 2026-08, and the original
+  diagnosis was wrong.** It was never a bad query: id 8 was simply the slowest of 13 sequential
+  per-dataset round trips over the SSH tunnel, and the total tipped past pg8000's 8s socket
+  timeout. Connecting directly (no tunnel) fixed it with no query change — re-verified live:
+  `/gene/TP53` returns 200 in ~5.0s with 401 real rows, and dataset 8 alone now answers in 0.48s.
+  Lesson worth keeping: a per-item timeout that only reproduces through a tunnel is evidence about
+  the *transport*, not the SQL.
 - **Click-to-pin (variant comparison) only works from QTL panels, not GWAS ones** —
   `multi-track-plot.js` only wires the click handler onto `track.kind === "qtl"` points (GWAS
   panels render a "click-to-compare unavailable for GWAS" note instead). Once a `(chrom,
