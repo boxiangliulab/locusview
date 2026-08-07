@@ -1,0 +1,45 @@
+{# Interactive tissue body map (Home page) — GTEx-style leader-line labels pointing at the real
+   EBI Expression Atlas anatomogram. ONE figure (2026-08, by request; it used to draw male +
+   female side by side) — see content/body_map.py's docstring for which one and why.
+   Context: anatomogram_svg (raw SVG markup),
+   body_map_regions = {region_id: [{qtl_list_id, level_1, level_2, dataset_label}, ...]},
+   body_map_region_labels = {region_id: label}. static/js/body-map.js tags the embedded SVG's
+   organs with data-region="..." on load (from their <title> text), builds one clickable text
+   label per region that actually HAS data (only those — see the JS's docstring), draws a
+   connector line from each label to its organ, and — since a raw anatomical shape isn't an
+   obvious click target on its own — clicking a label (or its organ) renders that region's
+   datasets in the table on the right. #}
+<div class="body-map-diagram">
+  <div class="body-map" id="body-map-container">
+    <div class="body-map-labels body-map-labels-left" id="body-map-labels-left"></div>
+    <div class="body-map-figures">
+      <div class="body-map-figure" id="body-map-figure">{{ anatomogram_svg | safe }}</div>
+    </div>
+    <div class="body-map-labels body-map-labels-right" id="body-map-labels-right"></div>
+    <svg class="body-map-leaders" id="body-map-leaders"></svg>
+  </div>
+  <div class="body-map-tooltip" id="body-map-tooltip" hidden></div>
+</div>
+<div class="body-map-side">
+  <div class="body-map-legend">
+    <span><span class="dot available"></span>has data — click a label for its datasets</span>
+    <span><span class="dot unavailable"></span>no data yet</span>
+  </div>
+  <div class="body-map-panel">
+    <div class="body-map-panel-title" id="body-map-panel-title">Click a labeled tissue</div>
+    <div class="table-wrap">
+      <table class="dataset-table" id="body-map-panel-table" hidden>
+        <thead>
+          <tr><th>Dataset</th><th>Context</th></tr>
+        </thead>
+        <tbody id="body-map-panel-tbody"></tbody>
+      </table>
+      <p class="muted" id="body-map-panel-empty" hidden>No datasets integrated for this region yet.</p>
+    </div>
+  </div>
+</div>
+<script>
+  window.BODY_MAP_REGIONS = {{ body_map_regions | tojson }};
+  window.BODY_MAP_LABELS = {{ body_map_region_labels | tojson }};
+</script>
+<script src="/static/js/body-map.js"></script>

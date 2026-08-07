@@ -1,0 +1,230 @@
+/* Shared design tokens + app shell (header/nav/footer). Palette matches Liu Fei's mockup
+   (docs/design/mockups/LocusView_Standalone_v1.html): blue accent on a slate/white surface. */
+
+:root {
+  --ink: #1e293b;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --line: #e2e8f0;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --lead: #f97316;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+code {
+  background: #f1f5f9;
+  color: #1d4ed8;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+
+/* ── Header / nav (shared by every page) ───────────────────────────────── */
+
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.site-header .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 32px;
+  flex-shrink: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+}
+.site-header .brand span.accent { color: var(--accent); }
+
+.site-nav { display: flex; gap: 2px; flex: 1; }
+.site-nav a {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+}
+.site-nav a:hover { color: var(--ink); text-decoration: none; }
+.site-nav a.active { color: var(--accent); background: var(--accent-soft); }
+
+.site-header .version {
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.site-footer {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.page { min-height: calc(100vh - 56px); }
+
+/* ── Shared component primitives (regional plot, data tables) ─────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.controls { display: flex; gap: 1rem; flex-wrap: wrap; align-items: end; margin-bottom: 0.6rem; }
+.controls label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 2px; }
+select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+#lv-plot { width: 100%; height: 420px; transition: opacity 0.15s; }
+.legend {
+  display: flex; gap: 0.8rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--muted);
+  margin-top: 0.4rem;
+}
+.swatch {
+  display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
+  vertical-align: middle; margin-right: 3px;
+}
+
+table.data-table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.92rem; }
+table.data-table th, table.data-table td {
+  text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line);
+}
+table.data-table th { border-bottom: 2px solid #cbd5e1; }
+table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+.badge {
+  display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 11px;
+  font-family: var(--mono);
+}
+.badge-blue { background: var(--accent-soft); color: #1d4ed8; }
+.badge-orange { background: #ffedd5; color: #9a3412; }
+
+/* ── Data Browser sidebar ──────────────────────────────────────────────── */
+
+.db-layout { flex: 1; display: flex; overflow: hidden; height: calc(100vh - 56px); }
+.db-sidebar {
+  width: 460px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--line);
+  overflow-y: auto; overflow-x: hidden; padding: 18px 16px; display: flex; flex-direction: column;
+  gap: 18px;
+}
+.db-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.db-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+.db-toggle {
+  display: flex; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 2px; gap: 2px;
+}
+.db-toggle-btn {
+  flex: 1; border: none; background: none; padding: 6px 10px; border-radius: 5px;
+  font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; font-family: var(--sans);
+}
+.db-toggle-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.db-checkbox-empty { font-size: 11px; padding: 4px; margin: 0; }
+
+/* Cascading QTL/GWAS picker (static/js/browser-picker.js) */
+.picker-rows { display: flex; flex-direction: column; gap: 6px; }
+.picker-row {
+  display: flex; align-items: flex-start; gap: 4px; padding: 6px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--bg);
+}
+.picker-select {
+  flex: 1 1 0; min-width: 0; box-sizing: border-box; border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 6px; font-size: 11.5px; font-family: var(--sans);
+  background: var(--surface); color: var(--ink);
+}
+.picker-select:disabled { color: var(--faint); background: var(--bg); }
+.picker-select[multiple] { min-height: 96px; align-self: stretch; flex: 1.3 1 0; }
+.picker-select[multiple] option { padding: 2px 4px; }
+.picker-row-remove {
+  flex-shrink: 0; border: none; background: none; color: var(--faint); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.picker-row-remove:hover { background: var(--line); color: var(--ink); }
+.db-add-row-btn {
+  align-self: flex-start; border: 1px dashed var(--line); background: none; color: var(--accent);
+  font-size: 12px; font-weight: 500; padding: 5px 10px; border-radius: 6px; cursor: pointer;
+  font-family: var(--sans);
+}
+.db-add-row-btn:hover { background: var(--accent-soft); }
+.db-locus-input input[type="text"] {
+  width: 100%; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 6px;
+  font-family: var(--sans); box-sizing: border-box;
+}
+.db-hint { font-size: 11px; color: var(--faint); margin-top: 5px; }
+.db-note {
+  background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 7px; padding: 10px 12px;
+  font-size: 12px; color: #3b82f6; line-height: 1.6;
+}
+.db-run-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 9px 12px;
+  font-size: 13.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 7px; font-family: var(--sans);
+}
+.db-run-btn:hover { background: #1d4ed8; }
+.db-main { flex: 1; overflow-y: auto; padding: 22px 26px; min-width: 0; }
+.db-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;
+  text-align: center; gap: 10px; color: var(--muted);
+}
+.db-plot-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+.db-plot-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.db-plot-header .sub { font-size: 12px; color: var(--faint); margin-top: 4px; font-family: var(--mono); }
+
+/* Results area: locuszoom plots (GWAS then selected QTL phenotypes) in the middle, the QTL
+   results-by-phenotype table in a fixed-width column on the right. */
+.db-results-row { display: flex; gap: 20px; align-items: flex-start; }
+.db-results-plots { flex: 1; min-width: 0; }
+.db-results-side { flex: 0 0 540px; min-width: 0; }
+
+.track-panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.track-panel-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.track-panel-kind {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; font-family: var(--mono);
+  color: #fff;
+}
+.track-panel-kind-qtl { background: #2563eb; }
+.track-panel-kind-gwas { background: #7c3aed; }
+.track-panel-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.track-panel-n { font-size: 11px; margin-left: auto; }
+.track-panel-plot { width: 100%; height: 220px; }
+[hidden] { display: none !important; }

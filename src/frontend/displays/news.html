@@ -1,0 +1,106 @@
+{% extends "layout.html" %}
+{% block title %}News — locusview{% endblock %}
+{% block head %}
+<style>
+  .news-section { max-width: 820px; margin: 0 auto; padding: 48px 28px; }
+  .news-section h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.6px; margin-bottom: 6px; }
+  .news-section > p.lede { font-size: 14px; color: var(--muted); margin-bottom: 40px; }
+
+  .timeline { position: relative; padding-left: 26px; margin-bottom: 48px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 6px; top: 8px; bottom: 16px; width: 1px;
+    background: linear-gradient(180deg, #bfdbfe, transparent);
+  }
+  .news-entry { margin-bottom: 30px; position: relative; }
+  .news-entry::before {
+    content: ""; position: absolute; left: -26px; top: 6px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--accent); border: 2px solid var(--bg);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  }
+  .news-entry.upcoming { opacity: 0.7; }
+  .news-entry.upcoming::before { background: transparent; border: 2px solid #cbd5e1; box-shadow: none; }
+  .news-date { font-size: 11px; color: var(--faint); font-family: var(--mono); margin-bottom: 8px; }
+  .news-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  .news-entry.upcoming .news-card { background: var(--bg); border-style: dashed; }
+  .news-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .news-entry.upcoming .news-title { color: var(--faint); }
+  .news-body { font-size: 13.5px; color: var(--muted); line-height: 1.7; margin-bottom: 12px; }
+  .news-tags { display: flex; gap: 7px; flex-wrap: wrap; }
+
+  .contribute h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 8px; }
+  .contribute > p.lede { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+  .step-num {
+    width: 28px; height: 28px; flex-shrink: 0; background: var(--accent-soft);
+    border: 1px solid #bfdbfe; border-radius: 7px; display: flex; align-items: center;
+    justify-content: center; color: #1d4ed8; font-weight: 700; font-size: 13px;
+  }
+  .step-title { font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 3px; }
+  .step-body { font-size: 13px; color: var(--muted); line-height: 1.65; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="news-section">
+  <h1>News &amp; Updates</h1>
+  <p class="lede">Release notes and upcoming features for the locusview portal.</p>
+
+  <div class="timeline">
+    {% for e in entries %}
+    <div class="news-entry {{ 'upcoming' if e.upcoming else '' }}">
+      <div class="news-date">{{ e.date }}</div>
+      <div class="news-card">
+        <div class="news-title">{{ e.title }}</div>
+        <div class="news-body">{{ e.body }}</div>
+        {% if e.tags %}
+        <div class="news-tags">
+          {% for t in e.tags %}<span class="badge badge-blue">{{ t }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="contribute">
+    <h2>Contributing data</h2>
+    <p class="lede">
+      Data contributions are planned for a later phase (see
+      <a href="https://github.com/boxiangliulab/locusview/blob/main/docs/adr/0007-community-contribution-model.md">ADR-0007</a>).
+      The intended process:
+    </p>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <div class="step-title">Format your summary statistics</div>
+        <div class="step-body">
+          A TSV with columns: <code>variant_id</code> <code>chr</code> <code>pos</code>
+          <code>pvalue</code> <code>beta</code> <code>se</code>, plus an LD reference panel
+          (VCF or PLINK).
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <div class="step-title">Contact us</div>
+        <div class="step-body">
+          Email metadata and a sample file to <code>data@locusview.org</code>, including cohort
+          description, phenotype, ancestry, and access restrictions.
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <div class="step-title">Processing &amp; integration</div>
+        <div class="step-body">
+          Human review, then a standardized mapping pipeline before the dataset becomes queryable.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

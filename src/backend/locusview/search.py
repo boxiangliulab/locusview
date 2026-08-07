@@ -62,6 +62,7 @@ _GENE_SYMBOL = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
 
 
 def _norm_chrom(c: str) -> str:
+    """Uppercase a chromosome label and map "M" to "MT" (the mito chrom's canonical name here)."""
     c = c.upper()
     return "MT" if c == "M" else c
 

@@ -1,0 +1,29 @@
+{# Available-datasets table (Home page). Context: dataset_rows = [{source, label, population, n_tissues}]. #}
+<div class="dataset-table-wrap">
+  {% if dataset_rows %}
+  <table class="dataset-table">
+    <thead>
+      <tr>
+        <th>Dataset</th>
+        <th>Data type</th>
+        <th>Population</th>
+        <th>Tissues / contexts</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in dataset_rows %}
+      <tr>
+        <td>
+          <div class="dataset-label">{{ row.label }}</div>
+        </td>
+        <td><span class="badge badge-blue">{{ row.qtl_type }}</span></td>
+        <td class="mono muted">{{ row.population }}</td>
+        <td>{{ row.n_tissues }} tissue{{ 's' if row.n_tissues != 1 else '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No datasets configured (offline/fake repository).</p>
+  {% endif %}
+</div>

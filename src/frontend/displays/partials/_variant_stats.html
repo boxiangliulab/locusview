@@ -1,0 +1,39 @@
+{# Variant comparison table: one variant's stats across the selected QTL/GWAS datasets.
+   Context: title (display label), coord ("chr17:7670000"), rows = [
+     {tissue, kind ("QTL"|"GWAS"), log_pvalue, pvalue, significant}
+   ]. #}
+<div class="card" style="padding:0;overflow:hidden">
+  <div style="padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+    <span class="swatch" style="background:#f97316;border-radius:50%;width:10px;height:10px"></span>
+    <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ title }}</span>
+    {% if coord %}<span class="mono muted" style="font-size:11px;margin-left:auto">{{ coord }}</span>{% endif %}
+  </div>
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Dataset</th>
+          <th>Type</th>
+          <th class="num">&minus;log&#8321;&#8320;(p)</th>
+          <th class="num">p-value</th>
+          <th style="text-align:center">Sig.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.tissue }}</td>
+          <td><span class="badge {{ 'badge-blue' if r.kind == 'QTL' else 'badge-orange' }}">{{ r.kind }}</span></td>
+          <td class="num">{{ '%.2f'|format(r.log_pvalue) if r.log_pvalue is not none else '' }}</td>
+          <td class="num">{{ '%.2e'|format(r.pvalue) if r.pvalue is not none else '' }}</td>
+          <td style="text-align:center">{{ '✓' if r.significant else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted" style="padding:14px 18px">No stats found for {{ title }} in the selected datasets.</p>
+  {% endif %}
+</div>

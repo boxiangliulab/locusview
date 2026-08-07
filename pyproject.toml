@@ -13,7 +13,8 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "jinja2>=3.1",
     "pydantic-settings>=2.4",
-    "pymysql>=1.1",
+    "pymysql>=1.1",  # legacy MySQL colotool DB — kept for reference, unused by default now
+    "pg8000>=1.31",  # pure-Python driver for the new Postgres locuscompare2 DB
 ]
 
 [project.scripts]
@@ -35,13 +36,21 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/locusview"]
+packages = ["src/backend/locusview"]
+# displays/ (HTML templates) and static/ live in the sibling src/frontend/ folder, not inside the
+# locusview package dir (see web.py's _STATIC_DIR comment) — this app is never deployed as a standalone
+# wheel today (uv run always executes from a full source checkout, local or in the Docker
+# image — see Dockerfile's "COPY . ." before "uv run"), so that's fine as-is; a real standalone
+# wheel distribution would need a force-include (or an importlib.resources-based rework) to
+# bundle frontend/ alongside the package, which isn't worth adding speculatively.
 
 # ── Ruff: linter + formatter ───────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests"]
+# src/backend is the locusview package's actual root now (see the wheel packages= comment above)
+# — needed so ruff's import sorter still recognizes "locusview" as first-party, not third-party.
+src = ["src/backend", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -74,4 +83,9 @@ ignore_missing_imports = true
 # pymysql does not ship type information.
 [[tool.mypy.overrides]]
 module = ["pymysql.*"]
+ignore_missing_imports = true
+
+# pg8000 does not ship type information.
+[[tool.mypy.overrides]]
+module = ["pg8000.*"]
 ignore_missing_imports = true
