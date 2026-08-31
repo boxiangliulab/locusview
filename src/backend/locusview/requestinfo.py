@@ -277,6 +277,7 @@ ConnectionFactory = Callable[[], Any]
 
 _ENSG = re.compile(r"^ENSG0*(\d+)$", re.IGNORECASE)
 
+
 def _parse_peak_id(phenotype_id: str | None) -> tuple[str, int, int] | None:
     """Parse a caQTL peak id (``"chr1_628997_629498"``) into ``(chrom, start, end)``.
 
@@ -472,9 +473,7 @@ class FakeQtlRepository:
             if a.dataset_id == dataset_id and str(a.chrom) == chrom and start <= a.position <= end
         ]
 
-    def _phenotype_overlaps(
-        self, hit: EqtlAssociation, chrom: str, start: int, end: int
-    ) -> bool:
+    def _phenotype_overlaps(self, hit: EqtlAssociation, chrom: str, start: int, end: int) -> bool:
         """Whether this association's PHENOTYPE (not its variant) overlaps ``[start, end]``.
 
         A ``chr_start_end`` phenotype id carries the caQTL peak's own coordinates; otherwise the
@@ -506,9 +505,7 @@ class FakeQtlRepository:
             ranked = sorted(group, key=lambda a: (a.pvalue is None, a.pvalue or 0.0))
             lead = ranked[0]
             summaries.append(
-                PhenotypeSummary(
-                    phenotype_id, lead.gene_id, lead.position, lead.pvalue, len(group)
-                )
+                PhenotypeSummary(phenotype_id, lead.gene_id, lead.position, lead.pvalue, len(group))
             )
         summaries.sort(key=lambda s: (s.lead_pvalue is None, s.lead_pvalue or 0.0))
         return summaries[:limit]

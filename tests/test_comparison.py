@@ -73,20 +73,28 @@ def test_variant_stats_qtl_uses_context_project_and_actual_type() -> None:
         datasets=[Dataset(1, "Blood", "eQTL-Catalogue-sQTL-EUR", "INTERVAL")],
         associations=[EqtlAssociation(1, 141510, None, 17, 7_670_000, 1e-8, 0.1, 0.05)],
     )
-    html = TestClient(create_app(repository=repo)).get(
-        "/browser/partials/variant-stats",
-        params={"chrom": "17", "position": 7_670_000, "datasets": "qtl:1"},
-    ).text
+    html = (
+        TestClient(create_app(repository=repo))
+        .get(
+            "/browser/partials/variant-stats",
+            params={"chrom": "17", "position": 7_670_000, "datasets": "qtl:1"},
+        )
+        .text
+    )
     assert "Blood (INTERVAL)" in html
     assert 'badge-blue">sQTL<' in html
     assert "eQTL-Catalogue-sQTL-EUR" not in html
 
 
 def test_variant_stats_only_shows_requested_columns() -> None:
-    html = _client().get(
-        "/browser/partials/variant-stats",
-        params={"chrom": "17", "position": 7_670_000, "datasets": "qtl:1,qtl:2"},
-    ).text
+    html = (
+        _client()
+        .get(
+            "/browser/partials/variant-stats",
+            params={"chrom": "17", "position": 7_670_000, "datasets": "qtl:1,qtl:2"},
+        )
+        .text
+    )
     assert "<th>Dataset</th>" in html
     assert "<th>Type</th>" in html
     assert "p-value" in html

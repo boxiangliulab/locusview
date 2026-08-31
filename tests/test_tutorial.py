@@ -16,9 +16,7 @@ def _client() -> TestClient:
             Dataset(2, "cMono_CD14", "CIMA-caQTL-EAS", "CIMA"),
             Dataset(3, "INTERVAL", "eQTL-Catalogue-sQTL-EUR", "INTERVAL"),
         ],
-        gwas_datasets=[
-            GwasDataset(1, "Basophil_count", "EUR", "GWAS Catalog", "GCST90002379")
-        ],
+        gwas_datasets=[GwasDataset(1, "Basophil_count", "EUR", "GWAS Catalog", "GCST90002379")],
     )
     return TestClient(create_app(repository=repo))
 

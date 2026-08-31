@@ -221,10 +221,10 @@ def metadata_record(dataset: Dataset, found: Resolved, population: str) -> dict:
             "study_type": dataset.study_type,
             "pmid": dataset.pmid,
             "population_from": (
-            "population_assignments.tsv ancestry counts"
-            if population
-            else "NOT AVAILABLE — study absent from population_assignments.tsv, fill in by hand"
-        ),
+                "population_assignments.tsv ancestry counts"
+                if population
+                else "NOT AVAILABLE — study absent from population_assignments.tsv, fill in by hand"
+            ),
         },
     }
 
@@ -457,9 +457,7 @@ def draft_email(
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    hits = search(
-        args.query, args.release, quant=args.quant, min_n=args.min_n, limit=args.top
-    )
+    hits = search(args.query, args.release, quant=args.quant, min_n=args.min_n, limit=args.top)
     if not hits:
         print(f"nothing in the {args.release} index matched {args.query!r}", file=sys.stderr)
         print("try `papers` to look for an unpublished-to-catalogue dataset", file=sys.stderr)
@@ -524,9 +522,11 @@ def cmd_download(args: argparse.Namespace) -> int:
     if found.note:
         print(f"cannot download: {found.note}", file=sys.stderr)
         return 1
-    wanted = ["nominal", "nominal_index"] if not args.all_files else [
-        "nominal", "nominal_index", "permuted", "credible_sets", "lbf"
-    ]
+    wanted = (
+        ["nominal", "nominal_index"]
+        if not args.all_files
+        else ["nominal", "nominal_index", "permuted", "credible_sets", "lbf"]
+    )
     for label in wanted:
         url = getattr(found, label)
         if not url:

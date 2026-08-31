@@ -27,13 +27,7 @@ def _qtl_dataset_names(datasets: list[Dataset]) -> list[str]:
 
 def _qtl_source_projects(datasets: list[Dataset], dataset: str) -> list[str]:
     """Source-project IDs within one dataset, e.g. ``["INTERVAL"]`` for eQTL Catalogue."""
-    return sorted(
-        {
-            d.source_project_id or ""
-            for d in datasets
-            if d.catalog_parts[0] == dataset
-        }
-    )
+    return sorted({d.source_project_id or "" for d in datasets if d.catalog_parts[0] == dataset})
 
 
 def _qtl_types(
@@ -170,9 +164,7 @@ def router(repo: QtlRepository) -> APIRouter:
         return _render(
             "browser.html",
             active="browser",
-            preselected_qtl_rows=_preselected_qtl_rows(
-                qtl_datasets, _parse_ids(selected, "qtl")
-            ),
+            preselected_qtl_rows=_preselected_qtl_rows(qtl_datasets, _parse_ids(selected, "qtl")),
             preselected_gwas_rows=_preselected_gwas_rows(
                 gwas_datasets, _parse_ids(selected, "gwas")
             ),
@@ -204,9 +196,7 @@ def router(repo: QtlRepository) -> APIRouter:
         dataset: str, qtl_type: str, source_project_id: str | None = None
     ) -> JSONResponse:
         """The picker's QTL "Context" multi-select, once dataset + type are chosen."""
-        return JSONResponse(
-            _qtl_contexts(repo.datasets(), dataset, source_project_id, qtl_type)
-        )
+        return JSONResponse(_qtl_contexts(repo.datasets(), dataset, source_project_id, qtl_type))
 
     @router.get("/api/browser/gwas/datasets")
     def gwas_dataset_names() -> JSONResponse:
