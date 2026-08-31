@@ -294,14 +294,16 @@ const MultiTrackPlot = (() => {
   }
 
   // ── QTL locuszoom panels for the currently-checked phenotype rows, LD-colored when possible ─
-  // Fetch r² of every variant to one lead rsID from /api/ld, or null on failure.
+  // Fetch r² of every variant to one lead rsID from /api/ld, or null when the lookup fails or
+  // returns no usable LD pairs.
   async function fetchLd(chrom, leadRsId, population) {
     try {
       const resp = await fetch(
         `/api/ld?chrom=${encodeURIComponent(chrom)}&lead=${leadRsId}&population=${encodeURIComponent(population)}`
       );
       if (!resp.ok) return null;
-      return (await resp.json()).r2;
+      const payload = await resp.json();
+      return payload.reference_present_in_1000g ? payload.r2 : null;
     } catch {
       return null;
     }

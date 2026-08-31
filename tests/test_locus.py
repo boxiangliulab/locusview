@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import pytest
 from fastapi.testclient import TestClient
 
 from locusview.requestinfo import (
@@ -31,7 +32,7 @@ class _TimingOutRepository(FakeQtlRepository):
         raise RepositoryTimeoutError("simulated timeout")
 
 
-def _plot_client() -> TestClient:
+def _plot_client(*, with_ld: bool = True) -> TestClient:
     repo = FakeQtlRepository(
         datasets=[Dataset(8, "Liver", "gtex-v8")],
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7661779, 7687550, "-")],
@@ -43,7 +44,7 @@ def _plot_client() -> TestClient:
             EqtlAssociation(8, 141510, None, 17, 7674000, 0.6, 0.02, 0.05),  # no rsID at all
         ],
         # A real panel never returns r² < 0.2 (the PLINK floor); nor does this fake.
-        ld={("17", 111, "EUR"): {222: 0.9, 333: 0.3}},
+        ld={("17", 111, "EUR"): {222: 0.9, 333: 0.3}} if with_ld else {},
     )
     return TestClient(create_app(repository=repo))
 
@@ -71,6 +72,15 @@ def test_regional_missing_ld_is_low_bin_not_grey() -> None:
     assert by_rs[444]["r2"] is None
     assert by_rs[444]["color"] == "#463699"  # lowest bin (< 0.2) — NOT grey
     assert by_rs[None]["color"] == "#AAAAAA"  # no rsID -> LD genuinely unknown
+
+
+def test_regional_without_usable_ld_pairs_returns_plain_plot_data() -> None:
+    body = _plot_client(with_ld=False).get("/api/gene/TP53/regional", params={"tissue": 8}).json()
+
+    assert body["reference_present_in_1000g"] is False
+    assert body["ld_legend"] == []
+    assert all(v["r2"] is None and v["color"] is None for v in body["variants"])
+    assert next(v for v in body["variants"] if v["rs_id"] == 111)["is_lead"] is True
 
 
 def test_regional_unknown_gene_is_404() -> None:
@@ -125,6 +135,15 @@ def test_ld_endpoint() -> None:
     assert body["r2"]["111"] == 1.0
     assert body["r2"]["222"] == 0.9
     assert body["reference_present_in_1000g"] is True
+
+
+def test_ld_endpoint_does_not_fabricate_a_self_pair_when_ld_is_unavailable() -> None:
+    response = _plot_client(with_ld=False).get(
+        "/api/ld", params={"chrom": "17", "lead": 111, "population": "EUR"}
+    )
+    assert response.status_code == 200
+    assert response.json()["reference_present_in_1000g"] is False
+    assert response.json()["r2"] == {}
 
 
 def test_ld_bad_chrom_is_400() -> None:
@@ -213,6 +232,24 @@ def test_locus_regional_region_mode_bad_chrom_is_400() -> None:
     assert r.status_code == 400
 
 
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(-1, 2), (2, 1), (1, 10_000_002)],
+)
+def test_locus_regional_region_mode_rejects_unsafe_bounds(start: int, end: int) -> None:
+    response = _plot_client().get(
+        "/api/locus/regional",
+        params={
+            "locus_mode": "region",
+            "tissue": 8,
+            "chrom": "17",
+            "start": start,
+            "end": end,
+        },
+    )
+    assert response.status_code == 400
+
+
 def test_locus_regional_variant_mode_by_rsid() -> None:
     body = (
         _plot_client()
@@ -252,16 +289,12 @@ def test_locus_regional_variant_mode_by_position() -> None:
 
 
 def test_locus_regional_variant_mode_missing_locator_is_400() -> None:
-    r = _plot_client().get(
-        "/api/locus/regional", params={"locus_mode": "variant", "tissue": 8}
-    )
+    r = _plot_client().get("/api/locus/regional", params={"locus_mode": "variant", "tissue": 8})
     assert r.status_code == 400
 
 
 def test_locus_regional_unknown_mode_is_400() -> None:
-    r = _plot_client().get(
-        "/api/locus/regional", params={"locus_mode": "wat", "tissue": 8}
-    )
+    r = _plot_client().get("/api/locus/regional", params={"locus_mode": "wat", "tissue": 8})
     assert r.status_code == 400
 
 

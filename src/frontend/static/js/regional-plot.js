@@ -5,7 +5,7 @@
 // (Data Browser, region/variant modes) — see routers/locus.py.
 const LocusPlot = (() => {
   const LD_BINS = [[0.2, "#463699"], [0.4, "#26BCE1"], [0.6, "#6EFE68"], [0.8, "#F8C32A"], [1.01, "#DB3D11"]];
-  const LEAD_COLOR = "#f97316", NO_RSID_COLOR = "#AAAAAA";
+  const LEAD_COLOR = "#f97316", TRACK_COLOR = "#2563eb", NO_RSID_COLOR = "#AAAAAA";
 
   // Map an r² value (or lack of one) to its LocusZoom-style dot color.
   // The 1000G panel stores only r² >= 0.2, so a missing r² means "below the floor", not "no data".
@@ -28,17 +28,21 @@ const LocusPlot = (() => {
   function render(state) {
     const { plotDiv, data } = state;
     const v = data.variants;
+    const hasLd = Boolean(data.reference_present_in_1000g);
+    state.ldContextEls.forEach((el) => { el.hidden = !hasLd; });
+    state.noLdContextEls.forEach((el) => { el.hidden = hasLd; });
     const traces = [{
       type: "scattergl", mode: "markers",
       x: v.map(d => d.position / 1e6), y: v.map(d => d.log_pvalue),
-      customdata: v.map(d => [d.rs_id, d.pvalue, r2label(d.r2), d.gene_id, d.position]),
+      customdata: v.map(d => [d.rs_id, d.pvalue, hasLd ? r2label(d.r2) : "", d.gene_id, d.position]),
       marker: {
-        color: v.map(d => d.color),
+        color: v.map(d => d.color || (d.is_lead ? LEAD_COLOR : TRACK_COLOR)),
         size: v.map(d => d.is_lead ? 12 : 7),
         symbol: v.map(d => d.is_lead ? "diamond" : "circle"), line: { width: 0 },
       },
       hovertemplate: "rs%{customdata[0]} · chr" + data.region.chrom +
-        ":%{customdata[4]:,}<br>p=%{customdata[1]:.2e} · r²=%{customdata[2]}<extra></extra>",
+        ":%{customdata[4]:,}<br>p=%{customdata[1]:.2e}" +
+        (hasLd ? " · r²=%{customdata[2]}" : "") + "<extra></extra>",
     }];
     const layout = {
       margin: { t: 8, r: 8, b: 44, l: 56 }, hovermode: "closest",
@@ -63,15 +67,19 @@ const LocusPlot = (() => {
       "&population=" + encodeURIComponent(state.popSel.value);
     const resp = await fetch(u);
     if (!resp.ok) return;
-    const m = (await resp.json()).r2;
-    // Re-point the lead: update r², the lead flag (diamond) and colour, so hover stays truthful.
+    const payload = await resp.json();
+    const hasLd = Boolean(payload.reference_present_in_1000g);
+    const m = hasLd ? payload.r2 : null;
+    state.data.reference_present_in_1000g = hasLd;
+    // Re-point the lead. If this lookup has no usable LD pairs, preserve all points and render
+    // them in the plain association colors instead of implying that every point has low r².
     state.data.variants.forEach(d => {
       const hasRsid = d.rs_id !== null && d.rs_id !== undefined;
       const isLead = hasRsid && String(d.rs_id) === String(rs);
       const key = String(d.rs_id);
       d.is_lead = isLead;
-      d.r2 = isLead ? 1.0 : (hasRsid && key in m ? m[key] : null);
-      d.color = r2color(d.r2, isLead, hasRsid);
+      d.r2 = hasLd ? (isLead ? 1.0 : (hasRsid && key in m ? m[key] : null)) : null;
+      d.color = hasLd ? r2color(d.r2, isLead, hasRsid) : null;
     });
     render(state);
   }
@@ -109,6 +117,8 @@ const LocusPlot = (() => {
       plotDiv: container.querySelector("#lv-plot"),
       tissueSel: container.querySelector("#lv-tissue"),
       popSel: container.querySelector("#lv-population"),
+      ldContextEls: container.querySelectorAll("[data-ld-context]"),
+      noLdContextEls: container.querySelectorAll("[data-no-ld-context]"),
       data: null,
       clickBound: false,
     };

@@ -29,6 +29,10 @@
   let lastData = null;
   let lastDatasets = [];
 
+  const SUPPORTED_CHROMS = new Set([...Array(22)].map((_, i) => String(i + 1)).concat("X"));
+  const MAX_REGION_SPAN = 10_000_000;
+  const MAX_DATASETS = 12;
+
   // Click-to-pin handler for a QTL panel point (see multi-track-plot.js) — loads that position's
   // cross-dataset comparison table.
   const onPointClick = (chrom, position) => {
@@ -65,17 +69,20 @@
 
   // ── locus-input parsing (mirrors locusview.search's regexes, client-side) ──
 
-  // Uppercase a chromosome label and map "M" to "MT", matching the backend's own normalization.
+  // Uppercase a chromosome label and reject anything outside the backend's 1-22/X contract.
   function normChrom(c) {
-    c = c.toUpperCase();
-    return c === "M" ? "MT" : c;
+    const chrom = c.toUpperCase();
+    return SUPPORTED_CHROMS.has(chrom) ? chrom : null;
   }
 
   // Parse "chr17:7660000-7690000" (or without the "chr" prefix) into {chrom, start, end}.
   function parseRegion(text) {
     const m = /^(?:chr)?([0-9]{1,2}|MT|[XYM]):([0-9]+)-([0-9]+)$/i.exec(text.trim());
     if (!m) return null;
-    return { chrom: normChrom(m[1]), start: parseInt(m[2], 10), end: parseInt(m[3], 10) };
+    const chrom = normChrom(m[1]);
+    const start = parseInt(m[2], 10), end = parseInt(m[3], 10);
+    if (!chrom || end < start || end - start > MAX_REGION_SPAN) return null;
+    return { chrom, start, end };
   }
 
   // Parse an rsID ("rs12345") or a "chr17:7670000" position into {rsid} or {chrom, position}.
@@ -84,7 +91,10 @@
     const rs = /^rs(\d+)$/i.exec(raw);
     if (rs) return { rsid: parseInt(rs[1], 10) };
     const m = /^(?:chr)?([0-9]{1,2}|MT|[XYM]):([0-9]+)$/i.exec(raw);
-    if (m) return { chrom: normChrom(m[1]), position: parseInt(m[2], 10) };
+    if (m) {
+      const chrom = normChrom(m[1]);
+      if (chrom) return { chrom, position: parseInt(m[2], 10) };
+    }
     return null;
   }
 
@@ -107,11 +117,11 @@
     }
     if (locusMode === "region") {
       const parsed = parseRegion($("db-region").value);
-      if (!parsed) return { error: "Region must look like chr17:7660000-7690000." };
+      if (!parsed) return { error: "Region must use chromosome 1-22 or X, have start <= end, and span at most 10 Mb." };
       return { locus_mode: "region", ...parsed, label: `chr${parsed.chrom}:${parsed.start}-${parsed.end}` };
     }
     const parsed = parseVariant($("db-variant").value);
-    if (!parsed) return { error: "Variant must be an rsID (rs...) or chr17:7670000." };
+    if (!parsed) return { error: "Variant must be an rsID (rs...) or a chromosome 1-22/X coordinate such as chr17:7670000." };
     return {
       locus_mode: "variant",
       ...parsed,
@@ -127,8 +137,9 @@
     await BrowserPicker.ready;
     const p = locusParams();
     if (p.error) return showError(p.error);
-    const datasets = selectedDatasets();
+    const datasets = [...new Set(selectedDatasets())];
     if (!datasets.length) return showError("Check at least one QTL or GWAS dataset.");
+    if (datasets.length > MAX_DATASETS) return showError(`Select at most ${MAX_DATASETS} datasets.`);
 
     const params = new URLSearchParams({ locus_mode: p.locus_mode, datasets: datasets.join(",") });
     if (p.gene) params.set("gene", p.gene);

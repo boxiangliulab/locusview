@@ -45,6 +45,26 @@ _VARIANT_WINDOW = 1_000_000
 # own span instead). Anchored to gene *start*, not the gene body, per the product spec.
 _GENE_WINDOW = 1_000_000
 
+# User-supplied region requests are allowed up to the largest window exercised against the live
+# database (~7 seconds for GWAS at 10 Mb). This prevents an accidental chromosome-scale scan while
+# preserving the tested custom-region use case. Dataset fan-out is capped below the browser's
+# typical ~16 WebGL-context ceiling so one request cannot multiply that cost without bound.
+_MAX_REGION_SPAN = 10_000_000
+_MAX_DATASET_KEYS = 12
+
+
+def _region_validation_error(chrom: str, start: int, end: int) -> str | None:
+    """Return an API-safe validation error for a user-supplied genomic window, if any."""
+    if chrom not in CHROMS:
+        return f"unknown chromosome: {chrom}"
+    if start < 0:
+        return "region start must be non-negative"
+    if end < start:
+        return "region end must be greater than or equal to start"
+    if end - start > _MAX_REGION_SPAN:
+        return f"region span must not exceed {_MAX_REGION_SPAN:,} base pairs"
+    return None
+
 
 def _lead_of(cis: list[EqtlAssociation]) -> EqtlAssociation | None:
     """The default lead: the min-p variant, falling back to the first row if none has a p-value.
@@ -64,11 +84,16 @@ def _lead_of(cis: list[EqtlAssociation]) -> EqtlAssociation | None:
 
 
 def _variants_payload(
-    cis: list[EqtlAssociation], lead: EqtlAssociation | None, r2map: dict[int, float]
+    cis: list[EqtlAssociation],
+    lead: EqtlAssociation | None,
+    r2map: dict[int, float],
+    *,
+    ld_available: bool,
 ) -> tuple[list[dict[str, object]], list[int]]:
     """Shape the single-track regional-plot response's per-point fields (position, r², LD color,
     is_lead) plus the list of plotted positions (used to derive the response's ``region``
-    bounds)."""
+    bounds). When the reference lookup has no usable pairs, r²/color stay unset so the frontend
+    renders a plain association plot instead of presenting missing LD as the lowest r² bin."""
     variants: list[dict[str, object]] = []
     positions: list[int] = []
     for a in cis:
@@ -76,9 +101,10 @@ def _variants_payload(
         if log_p is None:
             continue
         is_lead = lead is not None and a.rs_id == lead.rs_id and a.position == lead.position
-        has_rsid = a.rs_id is not None
-        # r2 None => the panel returned no pair => r² is below the 0.2 floor, not "no data".
-        r2 = r2map.get(a.rs_id) if a.rs_id is not None else None
+        r2 = r2map.get(a.rs_id) if ld_available and a.rs_id is not None else None
+        color = (
+            r2_color(r2, is_lead=is_lead, has_rsid=a.rs_id is not None) if ld_available else None
+        )
         variants.append(
             {
                 "rs_id": a.rs_id,
@@ -92,7 +118,7 @@ def _variants_payload(
                 "se": a.se,
                 "r2": r2,
                 "is_lead": is_lead,
-                "color": r2_color(r2, is_lead=is_lead, has_rsid=has_rsid),
+                "color": color,
             }
         )
         positions.append(a.position)
@@ -119,9 +145,10 @@ def _regional_response(
     if lead is not None and lead.rs_id is not None:
         r2map = repo.ld_r2(str(lead.chrom), lead.rs_id, population)
         reference_present = bool(r2map)
-        r2map[lead.rs_id] = 1.0
+        if reference_present:
+            r2map[lead.rs_id] = 1.0
 
-    variants, positions = _variants_payload(cis, lead, r2map)
+    variants, positions = _variants_payload(cis, lead, r2map, ld_available=reference_present)
     return JSONResponse(
         {
             "gene": label,
@@ -143,7 +170,7 @@ def _regional_response(
                 "position": lead.position,
                 "log_pvalue": neg_log10_p(lead.pvalue),
             },
-            "ld_legend": ld_legend(),
+            "ld_legend": ld_legend() if reference_present else [],
             "variants": variants,
         }
     )
@@ -400,8 +427,8 @@ def router(repo: QtlRepository) -> APIRouter:
                 return JSONResponse(
                     {"error": "chrom, start, end are required for region mode"}, status_code=400
                 )
-            if chrom not in CHROMS:
-                return JSONResponse({"error": f"unknown chromosome: {chrom}"}, status_code=400)
+            if error := _region_validation_error(chrom, start, end):
+                return JSONResponse({"error": error}, status_code=400)
             try:
                 cis = repo.associations_in_region(chrom, start, end, tissue)
             except RepositoryTimeoutError:
@@ -498,10 +525,15 @@ def router(repo: QtlRepository) -> APIRouter:
           position +/-1 MB** (``_VARIANT_WINDOW`` — shared with the older single-track
           ``/api/locus/regional`` endpoint's variant mode, same size).
         """
-        keys = [k for k in datasets.split(",") if k]
+        keys = list(dict.fromkeys(k.strip() for k in datasets.split(",") if k.strip()))
         if not keys:
             return JSONResponse(
                 {"error": "datasets is required (comma-separated qtl:<id>/gwas:<id>)"},
+                status_code=400,
+            )
+        if len(keys) > _MAX_DATASET_KEYS:
+            return JSONResponse(
+                {"error": f"at most {_MAX_DATASET_KEYS} dataset keys may be requested"},
                 status_code=400,
             )
 
@@ -527,8 +559,8 @@ def router(repo: QtlRepository) -> APIRouter:
                 return JSONResponse(
                     {"error": "chrom, start, end are required for region mode"}, status_code=400
                 )
-            if chrom not in CHROMS:
-                return JSONResponse({"error": f"unknown chromosome: {chrom}"}, status_code=400)
+            if error := _region_validation_error(chrom, start, end):
+                return JSONResponse({"error": error}, status_code=400)
             window_chrom, window_start, window_end = chrom, start, end
             label = f"chr{chrom}:{start}-{end}"
 
@@ -610,12 +642,10 @@ def router(repo: QtlRepository) -> APIRouter:
         All gene/region/variant initial requests return phenotype IDs only. Once the user checks
         one row, this endpoint fetches that phenotype's association values, already bounded to the
         displayed window in SQL, and enriches them for LD coloring."""
-        if chrom not in CHROMS:
-            return JSONResponse({"error": f"unknown chromosome: {chrom}"}, status_code=400)
+        if error := _region_validation_error(chrom, start, end):
+            return JSONResponse({"error": error}, status_code=400)
         try:
-            assocs = repo.associations_for_phenotype(
-                dataset_id, phenotype_id, chrom, start, end
-            )
+            assocs = repo.associations_for_phenotype(dataset_id, phenotype_id, chrom, start, end)
         except RepositoryTimeoutError:
             return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
         lead = _min_p(assocs)
@@ -630,7 +660,8 @@ def router(repo: QtlRepository) -> APIRouter:
             return JSONResponse({"error": f"unknown population: {population}"}, status_code=400)
         r2map = repo.ld_r2(chrom, lead, population)
         reference_present = bool(r2map)
-        r2map[lead] = 1.0
+        if reference_present:
+            r2map[lead] = 1.0
         return JSONResponse(
             {
                 "lead_rs_id": lead,

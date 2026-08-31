@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from locusview.requestinfo import (
@@ -23,12 +24,15 @@ def _client() -> TestClient:
         ],
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
         associations=[
-            EqtlAssociation(1, 141510, None, 17, 7_670_000, 1e-30, 0.5, 0.05,
-                            phenotype_id="ENSG00000141510.18"),
-            EqtlAssociation(1, 141510, None, 17, 7_671_000, 1e-3, 0.1, 0.05,
-                            phenotype_id="ENSG00000141510.18"),
-            EqtlAssociation(2, 141510, None, 17, 7_670_000, 0.5, 0.1, 0.05,
-                            phenotype_id="ENSG00000141510.18"),
+            EqtlAssociation(
+                1, 141510, None, 17, 7_670_000, 1e-30, 0.5, 0.05, phenotype_id="ENSG00000141510.18"
+            ),
+            EqtlAssociation(
+                1, 141510, None, 17, 7_671_000, 1e-3, 0.1, 0.05, phenotype_id="ENSG00000141510.18"
+            ),
+            EqtlAssociation(
+                2, 141510, None, 17, 7_670_000, 0.5, 0.1, 0.05, phenotype_id="ENSG00000141510.18"
+            ),
         ],
         gwas_datasets=[GwasDataset(1, "Basophil_count", "EUR", "GWAS Catalog", "GCST90002379")],
         gwas_associations=[
@@ -130,7 +134,14 @@ def test_multi_track_gene_mode_returns_phenotype_id_before_variant_data() -> Non
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
         associations=[
             EqtlAssociation(
-                1, 141510, None, 17, 7_670_000, 1e-9, 0.5, 0.05,
+                1,
+                141510,
+                None,
+                17,
+                7_670_000,
+                1e-9,
+                0.5,
+                0.05,
                 phenotype_id="ENSG00000141510.18",
             ),
         ],
@@ -179,11 +190,25 @@ def test_multi_track_qtl_track_groups_variants_by_phenotype() -> None:
         associations=[
             # sQTL-style: the same gene can have multiple splice-junction phenotypes.
             EqtlAssociation(
-                1, 141510, None, 17, 7_670_000, 1e-9, 0.5, 0.05,
+                1,
+                141510,
+                None,
+                17,
+                7_670_000,
+                1e-9,
+                0.5,
+                0.05,
                 phenotype_id="chr17:7670000:7671000:clu_1:ENSG00000141510.18",
             ),
             EqtlAssociation(
-                1, 141510, None, 17, 7_671_000, 1e-3, 0.1, 0.05,
+                1,
+                141510,
+                None,
+                17,
+                7_671_000,
+                1e-3,
+                0.1,
+                0.05,
                 phenotype_id="chr17:7671000:7672000:clu_2:ENSG00000141510.18",
             ),
         ],
@@ -282,6 +307,28 @@ def test_multi_track_unknown_dataset_is_silently_skipped() -> None:
     assert [t["key"] for t in body["tracks"]] == ["qtl:1"]
 
 
+def test_multi_track_deduplicates_dataset_keys() -> None:
+    response = _client().get(
+        "/api/locus/multi-track",
+        params={"locus_mode": "gene", "gene": "TP53", "datasets": "qtl:1,qtl:1"},
+    )
+    assert response.status_code == 200
+    assert [t["key"] for t in response.json()["tracks"]] == ["qtl:1"]
+
+
+def test_multi_track_rejects_more_than_twelve_dataset_keys() -> None:
+    response = _client().get(
+        "/api/locus/multi-track",
+        params={
+            "locus_mode": "gene",
+            "gene": "TP53",
+            "datasets": ",".join(f"qtl:{i}" for i in range(1, 14)),
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["error"] == "at most 12 dataset keys may be requested"
+
+
 def test_multi_track_region_mode() -> None:
     response = _client().get(
         "/api/locus/multi-track",
@@ -309,6 +356,24 @@ def test_multi_track_region_mode_bad_chrom_is_400() -> None:
         params={"locus_mode": "region", "chrom": "99", "start": 1, "end": 2, "datasets": "qtl:1"},
     )
     assert r.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(-1, 2), (2, 1), (1, 10_000_002)],
+)
+def test_multi_track_region_mode_rejects_unsafe_bounds(start: int, end: int) -> None:
+    response = _client().get(
+        "/api/locus/multi-track",
+        params={
+            "locus_mode": "region",
+            "chrom": "17",
+            "start": start,
+            "end": end,
+            "datasets": "qtl:1",
+        },
+    )
+    assert response.status_code == 400
 
 
 def test_multi_track_region_mode_missing_params_is_400() -> None:
@@ -353,9 +418,7 @@ def test_multi_track_variant_mode_missing_locator_is_400() -> None:
 
 
 def test_multi_track_unknown_mode_is_400() -> None:
-    r = _client().get(
-        "/api/locus/multi-track", params={"locus_mode": "wat", "datasets": "qtl:1"}
-    )
+    r = _client().get("/api/locus/multi-track", params={"locus_mode": "wat", "datasets": "qtl:1"})
     assert r.status_code == 400
 
 
@@ -414,11 +477,27 @@ def test_qtl_phenotype_enriches_and_clips_to_window() -> None:
     repo = FakeQtlRepository(
         associations=[
             EqtlAssociation(
-                1, 141510, 123, 17, 7_670_000, 1e-9, 0.5, 0.05, "C", "T",
+                1,
+                141510,
+                123,
+                17,
+                7_670_000,
+                1e-9,
+                0.5,
+                0.05,
+                "C",
+                "T",
                 phenotype_id="ENSG00000141510.18",
             ),
             EqtlAssociation(
-                1, 141510, None, 17, 9_000_000, 1e-3, 0.1, 0.05,
+                1,
+                141510,
+                None,
+                17,
+                9_000_000,
+                1e-3,
+                0.1,
+                0.05,
                 phenotype_id="ENSG00000141510.18",  # same phenotype, outside the window
             ),
         ],
@@ -446,3 +525,21 @@ def test_qtl_phenotype_bad_chrom_is_400() -> None:
         params={"dataset_id": 1, "phenotype_id": "x", "chrom": "99", "start": 0, "end": 1},
     )
     assert r.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(-1, 2), (2, 1), (1, 10_000_002)],
+)
+def test_qtl_phenotype_rejects_unsafe_bounds(start: int, end: int) -> None:
+    response = TestClient(create_app(repository=FakeQtlRepository())).get(
+        "/api/locus/qtl-phenotype",
+        params={
+            "dataset_id": 1,
+            "phenotype_id": "x",
+            "chrom": "17",
+            "start": start,
+            "end": end,
+        },
+    )
+    assert response.status_code == 400
