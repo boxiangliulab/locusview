@@ -109,7 +109,7 @@ const MultiTrackPlot = (() => {
       <div class="track-panel-header">
         <span class="track-panel-kind track-panel-kind-${track.kind}">${track.kind.toUpperCase()}</span>
         <span class="track-panel-label">${track.label}</span>
-        <span class="muted mono track-panel-n">n=${track.variants.length}${track.kind === "qtl" ? "" : " &middot; click-to-compare unavailable for GWAS"}</span>
+        ${track.kind === "qtl" ? "" : '<span class="muted mono track-panel-n">click-to-compare unavailable for GWAS</span>'}
       </div>
       <div id="${panelId(track.key)}" class="track-panel-plot"></div>
     `;
@@ -257,6 +257,7 @@ const MultiTrackPlot = (() => {
         <tr>
           <td><input type="checkbox" class="qtl-pheno-checkbox" data-index="${i}"></td>
           <td>${track.dataset}</td>
+          <td>${track.source_project_id || ""}</td>
           <td><span class="badge badge-blue">${track.qtl_type}</span></td>
           <td class="mono muted">${track.population}</td>
           <td>${track.context}</td>
@@ -276,7 +277,7 @@ const MultiTrackPlot = (() => {
           <table class="data-table">
             <thead>
               <tr>
-                <th></th><th>Dataset</th><th>QTL type</th><th>Population</th><th>Context</th>
+                <th></th><th>Dataset</th><th>Source project ID</th><th>QTL type</th><th>Population</th><th>Context</th>
                 <th>Phenotype ID</th><th class="num">Lead position</th>
                 <th class="num">Lead &minus;log&#8321;&#8320;(p)</th>
               </tr>

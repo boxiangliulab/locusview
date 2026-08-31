@@ -283,6 +283,7 @@ def _qtl_track(
         "dataset_id": dataset_id,
         "label": f"{dataset.source} — {dataset.tissue}",
         "dataset": dataset_name,
+        "source_project_id": dataset.source_project_id or "",
         "qtl_type": qtl_type,
         "population": population,
         "context": dataset.tissue,

@@ -70,13 +70,16 @@ def router(repo: QtlRepository) -> APIRouter:
                 dataset = qtl_by_id.get(did)
                 if dataset is None:
                     continue
+                dataset_name, qtl_type, _ = dataset.catalog_parts
+                source_project_id = dataset.source_project_id or dataset_name
                 for qtl_hit in repo.associations_in_region(chrom, position, position, did):
                     entries.append(
                         (
                             qtl_hit.pvalue,
                             {
-                                "tissue": f"{dataset.tissue} ({dataset.source})",
-                                "kind": "QTL",
+                                "dataset_label": f"{dataset.tissue} ({source_project_id})",
+                                "type": qtl_type,
+                                "is_gwas": False,
                                 "pvalue": qtl_hit.pvalue,
                             },
                         )
@@ -91,8 +94,9 @@ def router(repo: QtlRepository) -> APIRouter:
                         (
                             gwas_hit.pvalue,
                             {
-                                "tissue": f"{trait} ({gwas_dataset.population})",
-                                "kind": "GWAS",
+                                "dataset_label": f"{trait} ({gwas_dataset.accession})",
+                                "type": "GWAS",
+                                "is_gwas": True,
                                 "pvalue": gwas_hit.pvalue,
                             },
                         )

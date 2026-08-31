@@ -63,8 +63,23 @@ def test_variant_stats_by_position_compares_across_qtl_and_gwas() -> None:
     assert "chr17:7670000" in html
     assert "Whole_Blood" in html and "Liver" in html
     assert "Basophil count" in html
-    assert 'badge-blue">QTL<' in html
+    assert "Basophil count (GCST90002379)" in html
+    assert 'badge-blue">eQTL<' in html
     assert 'badge-orange">GWAS<' in html
+
+
+def test_variant_stats_qtl_uses_context_project_and_actual_type() -> None:
+    repo = FakeQtlRepository(
+        datasets=[Dataset(1, "Blood", "eQTL-Catalogue-sQTL-EUR", "INTERVAL")],
+        associations=[EqtlAssociation(1, 141510, None, 17, 7_670_000, 1e-8, 0.1, 0.05)],
+    )
+    html = TestClient(create_app(repository=repo)).get(
+        "/browser/partials/variant-stats",
+        params={"chrom": "17", "position": 7_670_000, "datasets": "qtl:1"},
+    ).text
+    assert "Blood (INTERVAL)" in html
+    assert 'badge-blue">sQTL<' in html
+    assert "eQTL-Catalogue-sQTL-EUR" not in html
 
 
 def test_variant_stats_only_shows_requested_columns() -> None:

@@ -442,12 +442,16 @@ class PostgresQtlRepository:
             return []
 
         rows = self._query(
-            f"SELECT s.chrom, s.position, s.pval, s.beta, s.se, s.ref, s.alt, v.rsid, "
+            f"SELECT s.chrom, s.position, s.pval, s.beta, s.se, s.ref, s.alt, "
+            f"COALESCE(v.rsid, vr.rsid), "
             f"s.phenotype_key "
             f"FROM {shard} s "
             f"LEFT JOIN variant_rsid_mapping_raw v "
             f"ON v.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.ref || '_' "
             f"|| s.alt "
+            f"LEFT JOIN variant_rsid_mapping_raw vr "
+            f"ON vr.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.alt || '_' "
+            f"|| s.ref "
             f"WHERE s.phenotype_key = ANY(%s)",
             (list(phenotype_map.keys()),),
         )
@@ -650,11 +654,15 @@ class PostgresQtlRepository:
         phenotype_key, gene_id_raw = key_rows[0]
         gene_id = _to_int(gene_id_raw) or 0
         rows = self._query(
-            f"SELECT s.chrom, s.position, s.pval, s.beta, s.se, s.ref, s.alt, v.rsid "
+            f"SELECT s.chrom, s.position, s.pval, s.beta, s.se, s.ref, s.alt, "
+            f"COALESCE(v.rsid, vr.rsid) "
             f"FROM {shard} s "
             f"LEFT JOIN variant_rsid_mapping_raw v "
             f"ON v.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.ref || '_' "
             f"|| s.alt "
+            f"LEFT JOIN variant_rsid_mapping_raw vr "
+            f"ON vr.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.alt || '_' "
+            f"|| s.ref "
             f"WHERE s.phenotype_key = %s AND s.chrom = %s "
             f"AND s.position BETWEEN %s AND %s",
             (phenotype_key, chrom, start, end),

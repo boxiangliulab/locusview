@@ -155,6 +155,19 @@ def test_multi_track_qtl_track_carries_dataset_metadata() -> None:
     assert qtl_track["qtl_type"] == "eQTL"
     assert qtl_track["population"] == "ALL"
     assert qtl_track["context"] == "Whole_Blood"
+    assert qtl_track["source_project_id"] == ""
+
+
+def test_multi_track_qtl_track_carries_source_project_id() -> None:
+    repo = FakeQtlRepository(
+        datasets=[Dataset(5, "Blood", "eQTL-Catalogue-eQTL-EUR", "INTERVAL")],
+        genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
+    )
+    response = TestClient(create_app(repository=repo)).get(
+        "/api/locus/multi-track",
+        params={"locus_mode": "gene", "gene": "TP53", "datasets": "qtl:5"},
+    )
+    assert response.json()["tracks"][0]["source_project_id"] == "INTERVAL"
 
 
 def test_multi_track_qtl_track_groups_variants_by_phenotype() -> None:

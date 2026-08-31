@@ -1,4 +1,4 @@
-// Data Browser sidebar: cascading QTL (Dataset -> QTL type -> Context) / GWAS (Dataset ->
+// Data Browser sidebar: cascading QTL (Dataset -> Source project ID -> QTL type -> Context) / GWAS (Dataset ->
 // Accession+Trait) picker. Every level is fetched live from routers/browser.py's
 // /api/browser/... catalog endpoints as the user narrows each box down, so a newly-ingested
 // dataset shows up without a reload — deliberately not a flat pre-rendered list (doesn't scale
@@ -55,24 +55,62 @@ const BrowserPicker = (() => {
 
   // ── QTL row ──────────────────────────────────────────────────────────────
 
-  // Populate one QTL row's "Type" dropdown for the chosen dataset (and clear/disable "Context").
-  async function loadQtlTypes(row, datasetName) {
+  // Populate one QTL row's source-project dropdown for the chosen dataset and reset descendants.
+  async function loadQtlSourceProjects(row, datasetName) {
+    const projectSel = row.querySelector('[data-role="source_project_id"]');
+    const typeSel = row.querySelector('[data-role="qtl_type"]');
+    const contextSel = row.querySelector('[data-role="context"]');
+    typeSel.innerHTML = "";
+    typeSel.disabled = true;
+    contextSel.innerHTML = "";
+    contextSel.disabled = true;
+    if (!datasetName) {
+      fillSelect(projectSel, [], "Source project ID…");
+      projectSel.disabled = true;
+      return;
+    }
+    const projects = await fetchJSON(
+      `/api/browser/qtl/source-projects?dataset=${encodeURIComponent(datasetName)}`
+    );
+    // The user may switch Dataset while the previous request is still in flight. Never let the
+    // older response repopulate the row for the newly selected dataset.
+    if (row.querySelector('[data-role="dataset"]').value !== datasetName) return;
+    fillSelect(projectSel, projects, "Source project ID…");
+    projectSel.disabled = false;
+    // Every currently integrated dataset has one source project. Select that sole value and
+    // continue the cascade automatically instead of leaving QTL type/context disabled behind a
+    // redundant extra click. The dropdown remains useful once a dataset has multiple projects.
+    if (projects.length === 1) {
+      projectSel.value = typeof projects[0] === "object" ? projects[0].id : projects[0];
+      await loadQtlTypes(row, datasetName, projectSel.value);
+    }
+  }
+
+  // Populate the QTL-type dropdown for one dataset + source project.
+  async function loadQtlTypes(row, datasetName, sourceProjectId) {
     const typeSel = row.querySelector('[data-role="qtl_type"]');
     const contextSel = row.querySelector('[data-role="context"]');
     contextSel.innerHTML = "";
     contextSel.disabled = true;
-    if (!datasetName) {
+    if (!sourceProjectId) {
       fillSelect(typeSel, [], "QTL type…");
       typeSel.disabled = true;
       return;
     }
-    const types = await fetchJSON(`/api/browser/qtl/types?dataset=${encodeURIComponent(datasetName)}`);
+    const types = await fetchJSON(
+      `/api/browser/qtl/types?dataset=${encodeURIComponent(datasetName)}` +
+        `&source_project_id=${encodeURIComponent(sourceProjectId)}`
+    );
+    if (
+      row.querySelector('[data-role="dataset"]').value !== datasetName ||
+      row.querySelector('[data-role="source_project_id"]').value !== sourceProjectId
+    ) return;
     fillSelect(typeSel, types, "QTL type…");
     typeSel.disabled = false;
   }
 
   // Populate one QTL row's "Context" multi-select for the chosen dataset + type.
-  async function loadQtlContexts(row, datasetName, qtlType) {
+  async function loadQtlContexts(row, datasetName, sourceProjectId, qtlType) {
     const contextSel = row.querySelector('[data-role="context"]');
     if (!qtlType) {
       contextSel.innerHTML = "";
@@ -81,6 +119,7 @@ const BrowserPicker = (() => {
     }
     const contexts = await fetchJSON(
       `/api/browser/qtl/contexts?dataset=${encodeURIComponent(datasetName)}` +
+        `&source_project_id=${encodeURIComponent(sourceProjectId)}` +
         `&qtl_type=${encodeURIComponent(qtlType)}`
     );
     fillSelect(contextSel, contexts);
@@ -90,9 +129,15 @@ const BrowserPicker = (() => {
   // Bind one QTL row's cascading dropdown listeners and its remove button.
   function wireQtlRow(row) {
     const datasetSel = row.querySelector('[data-role="dataset"]');
+    const projectSel = row.querySelector('[data-role="source_project_id"]');
     const typeSel = row.querySelector('[data-role="qtl_type"]');
-    datasetSel.addEventListener("change", () => loadQtlTypes(row, datasetSel.value));
-    typeSel.addEventListener("change", () => loadQtlContexts(row, datasetSel.value, typeSel.value));
+    datasetSel.addEventListener("change", () => loadQtlSourceProjects(row, datasetSel.value));
+    projectSel.addEventListener("change", () =>
+      loadQtlTypes(row, datasetSel.value, projectSel.value)
+    );
+    typeSel.addEventListener("change", () =>
+      loadQtlContexts(row, datasetSel.value, projectSel.value, typeSel.value)
+    );
     row.querySelector(".picker-row-remove").addEventListener("click", () => row.remove());
   }
 
@@ -112,9 +157,12 @@ const BrowserPicker = (() => {
 
     if (preset) {
       datasetSel.value = preset.dataset;
-      await loadQtlTypes(row, preset.dataset);
+      await loadQtlSourceProjects(row, preset.dataset);
+      const projectSel = row.querySelector('[data-role="source_project_id"]');
+      projectSel.value = preset.source_project_id;
+      await loadQtlTypes(row, preset.dataset, preset.source_project_id);
       row.querySelector('[data-role="qtl_type"]').value = preset.qtl_type;
-      await loadQtlContexts(row, preset.dataset, preset.qtl_type);
+      await loadQtlContexts(row, preset.dataset, preset.source_project_id, preset.qtl_type);
       selectValues(row.querySelector('[data-role="context"]'), preset.context_ids);
     }
   }

@@ -1,4 +1,4 @@
-{# Data Browser sidebar: cascading QTL (Dataset -> QTL type -> Context) / GWAS (Dataset ->
+{# Data Browser sidebar: cascading QTL (Dataset -> Source project ID -> QTL type -> Context) / GWAS (Dataset ->
    Accession+Trait) picker (static/js/browser-picker.js drives everything live against
    routers/browser.py's /api/browser/... catalog endpoints), locus mode + input, Run Query.
    Context: preselected_qtl_rows [{dataset, qtl_type, context_ids}], preselected_gwas_rows
@@ -13,6 +13,7 @@
     <template id="qtl-row-template">
       <div class="picker-row" data-kind="qtl">
         <select class="picker-select" data-role="dataset"></select>
+        <select class="picker-select" data-role="source_project_id" disabled></select>
         <select class="picker-select" data-role="qtl_type" disabled></select>
         <select class="picker-select" data-role="context" multiple disabled></select>
         <button type="button" class="picker-row-remove" title="Remove this QTL row">&times;</button>

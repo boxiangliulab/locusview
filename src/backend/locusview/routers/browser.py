@@ -1,7 +1,7 @@
 """Data Browser page: the sidebar's cascading QTL/GWAS picker (Dataset -> QTL type -> Context /
 Dataset -> Accession+Trait) driving the stacked multi-track LocusZoom plot
 (:mod:`locusview.routers.locus`'s multi-track endpoint). This module renders the page shell plus
-five small JSON "catalog" endpoints the picker calls live as the user narrows each box down
+six small JSON "catalog" endpoints the picker calls live as the user narrows each box down
 (``static/js/browser-picker.js``) — deliberately not one big flat list (doesn't scale visually as
 more datasets get ingested) and deliberately live per-request (not cached), so a newly-ingested
 dataset shows up without a deploy.
@@ -25,25 +25,46 @@ def _qtl_dataset_names(datasets: list[Dataset]) -> list[str]:
     return sorted({d.catalog_parts[0] for d in datasets})
 
 
-def _qtl_types(datasets: list[Dataset], dataset: str) -> list[str]:
+def _qtl_source_projects(datasets: list[Dataset], dataset: str) -> list[str]:
+    """Source-project IDs within one dataset, e.g. ``["INTERVAL"]`` for eQTL Catalogue."""
+    return sorted(
+        {
+            d.source_project_id or ""
+            for d in datasets
+            if d.catalog_parts[0] == dataset
+        }
+    )
+
+
+def _qtl_types(
+    datasets: list[Dataset], dataset: str, source_project_id: str | None = None
+) -> list[str]:
     """QTL types available for one dataset name (the picker's second dropdown), e.g.
     ``["eQTL", "sQTL"]`` for ``GTEx_v10``."""
     types: set[str] = set()
     for d in datasets:
         dataset_name, qtl_type, _ = d.catalog_parts
-        if dataset_name == dataset:
+        if dataset_name == dataset and (
+            source_project_id is None or (d.source_project_id or "") == source_project_id
+        ):
             types.add(qtl_type)
     return sorted(types)
 
 
-def _qtl_contexts(datasets: list[Dataset], dataset: str, qtl_type: str) -> list[dict[str, object]]:
+def _qtl_contexts(
+    datasets: list[Dataset], dataset: str, source_project_id: str | None, qtl_type: str
+) -> list[dict[str, object]]:
     """Context dropdown options for one dataset + QTL type. ``Dataset.tissue`` is already the
     display label — level 2 when present, else level 1 (see ``connectpostgres.py``'s
     ``datasets()``) — so nothing to reformat here."""
     options = []
     for d in datasets:
         dataset_name, dataset_qtl_type, _ = d.catalog_parts
-        if dataset_name == dataset and dataset_qtl_type == qtl_type:
+        if (
+            dataset_name == dataset
+            and (source_project_id is None or (d.source_project_id or "") == source_project_id)
+            and dataset_qtl_type == qtl_type
+        ):
             options.append({"id": d.id, "label": d.tissue})
     return sorted(options, key=lambda o: str(o["label"]))
 
@@ -69,19 +90,30 @@ def _preselected_qtl_rows(
     """Group already-selected ``qtl:<id>`` ids (e.g. from a deep-linked ``?datasets=``) by
     (dataset, qtl_type) into rows the picker can hydrate — same shape it builds interactively."""
     by_id = {d.id: d for d in datasets}
-    groups: dict[tuple[str, str], list[int]] = {}
-    order: list[tuple[str, str]] = []
+    groups: dict[tuple[str, str, str], list[int]] = {}
+    order: list[tuple[str, str, str]] = []
     for id_ in selected_ids:
         d = by_id.get(id_)
         if d is None:
             continue
         dataset_name, qtl_type, _ = d.catalog_parts
-        key = (dataset_name, qtl_type)
+        key = (dataset_name, d.source_project_id or "", qtl_type)
         if key not in groups:
             groups[key] = []
             order.append(key)
         groups[key].append(id_)
-    return [{"dataset": ds, "qtl_type": qt, "context_ids": groups[(ds, qt)]} for ds, qt in order]
+    rows = []
+    for ds, project, qt in order:
+        row: dict[str, object] = {
+            "dataset": ds,
+            "qtl_type": qt,
+            "context_ids": groups[(ds, project, qt)],
+        }
+        # Preserve legacy deep-link payloads for old catalog rows that predate this column.
+        if project:
+            row["source_project_id"] = project
+        rows.append(row)
+    return rows
 
 
 def _preselected_gwas_rows(
@@ -158,14 +190,23 @@ def router(repo: QtlRepository) -> APIRouter:
         return JSONResponse(_qtl_dataset_names(repo.datasets()))
 
     @router.get("/api/browser/qtl/types")
-    def qtl_types(dataset: str) -> JSONResponse:
+    def qtl_types(dataset: str, source_project_id: str | None = None) -> JSONResponse:
         """The picker's QTL "Type" dropdown, once a dataset is chosen."""
-        return JSONResponse(_qtl_types(repo.datasets(), dataset))
+        return JSONResponse(_qtl_types(repo.datasets(), dataset, source_project_id))
+
+    @router.get("/api/browser/qtl/source-projects")
+    def qtl_source_projects(dataset: str) -> JSONResponse:
+        """The picker's source-project dropdown, once a QTL dataset is chosen."""
+        return JSONResponse(_qtl_source_projects(repo.datasets(), dataset))
 
     @router.get("/api/browser/qtl/contexts")
-    def qtl_contexts(dataset: str, qtl_type: str) -> JSONResponse:
+    def qtl_contexts(
+        dataset: str, qtl_type: str, source_project_id: str | None = None
+    ) -> JSONResponse:
         """The picker's QTL "Context" multi-select, once dataset + type are chosen."""
-        return JSONResponse(_qtl_contexts(repo.datasets(), dataset, qtl_type))
+        return JSONResponse(
+            _qtl_contexts(repo.datasets(), dataset, source_project_id, qtl_type)
+        )
 
     @router.get("/api/browser/gwas/datasets")
     def gwas_dataset_names() -> JSONResponse:

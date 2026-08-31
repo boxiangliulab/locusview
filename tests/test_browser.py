@@ -117,12 +117,52 @@ def test_qtl_catalog_endpoints_handle_hyphenated_dataset_name() -> None:
     client = TestClient(create_app(repository=repo))
     assert client.get("/api/browser/qtl/datasets").json() == ["eQTL-Catalogue"]
     assert client.get(
+        "/api/browser/qtl/source-projects", params={"dataset": "eQTL-Catalogue"}
+    ).json() == ["INTERVAL"]
+    assert client.get(
         "/api/browser/qtl/types", params={"dataset": "eQTL-Catalogue"}
     ).json() == ["eQTL", "sQTL"]
     assert client.get(
         "/api/browser/qtl/contexts",
         params={"dataset": "eQTL-Catalogue", "qtl_type": "sQTL"},
     ).json() == [{"id": 6, "label": "INTERVAL"}]
+
+
+def test_qtl_catalog_filters_types_and_contexts_by_source_project() -> None:
+    repo = FakeQtlRepository(
+        datasets=[
+            Dataset(5, "Blood", "eQTL-Catalogue-eQTL-EUR", "INTERVAL"),
+            Dataset(6, "Monocyte", "eQTL-Catalogue-sQTL-EUR", "BLUEPRINT"),
+        ]
+    )
+    client = TestClient(create_app(repository=repo))
+    assert client.get(
+        "/api/browser/qtl/types",
+        params={"dataset": "eQTL-Catalogue", "source_project_id": "INTERVAL"},
+    ).json() == ["eQTL"]
+    assert client.get(
+        "/api/browser/qtl/contexts",
+        params={
+            "dataset": "eQTL-Catalogue",
+            "source_project_id": "INTERVAL",
+            "qtl_type": "eQTL",
+        },
+    ).json() == [{"id": 5, "label": "Blood"}]
+
+
+def test_browser_preselection_includes_source_project() -> None:
+    repo = FakeQtlRepository(
+        datasets=[Dataset(5, "Blood", "eQTL-Catalogue-eQTL-EUR", "INTERVAL")]
+    )
+    html = TestClient(create_app(repository=repo)).get("/browser").text
+    assert _preselected(html, "PRESELECTED_QTL_ROWS") == [
+        {
+            "dataset": "eQTL-Catalogue",
+            "source_project_id": "INTERVAL",
+            "qtl_type": "eQTL",
+            "context_ids": [5],
+        }
+    ]
 
 
 def test_qtl_types_for_dataset() -> None:
