@@ -28,6 +28,7 @@ from locusview.requestinfo import (
     GwasAssociation,
     GwasDataset,
     QtlContextEntry,
+    RepositoryTimeoutError,
 )
 
 Row = Sequence[Any]
@@ -127,6 +128,26 @@ def _routing_factory(
     return (lambda: _Conn()), log
 
 
+def test_socket_timeout_is_translated_and_connection_is_closed() -> None:
+    class TimeoutCursor:
+        def execute(self, sql: str, params: Sequence[Any] = ()) -> None:
+            raise TimeoutError("socket read timed out")
+
+    class TimeoutConnection:
+        closed = False
+
+        def cursor(self) -> TimeoutCursor:
+            return TimeoutCursor()
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = TimeoutConnection()
+    with pytest.raises(RepositoryTimeoutError):
+        PostgresQtlRepository(lambda: connection).datasets()
+    assert connection.closed is True
+
+
 # ── datasets() ───────────────────────────────────────────────────────────────
 
 
@@ -135,16 +156,17 @@ def test_datasets_labels_context_as_level_2_when_present_else_level_1() -> None:
     (see datasets()'s comment)."""
     factory, log = _factory(
         [
-            (1, "GTEx_v10", "eQTL", "ALL", "Whole_Blood", None),  # no level 2 -> level 1
-            (3, "CIMA", "caQTL", "EAS", "Whole_Blood", "cMono_CD14"),  # level 2 -> level 2 only
+            (1, "GTEx_v10", "eQTL", "ALL", "Whole_Blood", None, "GTEx_v10"),
+            (3, "CIMA", "caQTL", "EAS", "Whole_Blood", "cMono_CD14", "CIMA"),
         ]
     )
     repo = PostgresQtlRepository(factory)
     assert repo.datasets() == [
-        Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL"),
-        Dataset(3, "cMono_CD14", "CIMA-caQTL-EAS"),
+        Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL", "GTEx_v10"),
+        Dataset(3, "cMono_CD14", "CIMA-caQTL-EAS", "CIMA"),
     ]
     assert "to_regclass" in log[0][0]  # only lists datasets with a materialized shard
+    assert "source_project_id" in log[0][0]
 
 
 # ── gene resolution (via gencode_v39) ───────────────────────────────────────
@@ -215,8 +237,8 @@ def test_cis_associations_gene_id_branch() -> None:
     enrich with rs_id/ref/alt via the two-step phenotype_key resolution (see docstring)."""
 
     def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
-        if "gene_id IS NOT NULL" in sql:
-            return [(1,)]  # this dataset's phenotype table uses gene_id
+        if "d.qtl_type" in sql:
+            return [("eQTL",)]  # gene-keyed dataset -> match on gene_id, not peaks
         if "WHERE gene_id = %s" in sql:
             assert params == ("141510",)  # text compare, no ::bigint cast (see docstring)
             return [(7791, "ENSG00000141510.18")]
@@ -237,16 +259,16 @@ def test_cis_associations_gene_id_branch() -> None:
 
 def test_cis_associations_caqtl_position_branch() -> None:
     """caQTL-style: phenotype table's gene_id is NULL everywhere -> resolve the gene's start via
-    gencode_v39, then match phenotype_id "chr_start_end" peaks containing that start."""
+    gencode_v39, then match the peak rows whose (chrom, start, end) contain that start."""
 
     def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
-        if "gene_id IS NOT NULL" in sql:
-            return []  # no gene_id anywhere -> caQTL-style
+        if "d.qtl_type" in sql:
+            return [("caQTL",)]  # peak-shaped dataset -> match chrom + peak range
         if "gencode_v39" in sql:
             return [("225972", "MTND1P23", "ENSG00000225972.1", "chr1", 629062, 629433, "+")]
-        if "split_part" in sql:
+        if "chrom = %s AND start" in sql:
             assert params == ("chr1", 629062, 629062)
-            return [(8, "chr1_628997_629498")]
+            return [(8, "chr1_628997_629498", None)]
         if "phenotype_key = ANY" in sql:
             assert params == ([8],)
             return [("1", 629100, "0.05", "0.1", "0.06", "G", "T", None, 8)]
@@ -257,24 +279,99 @@ def test_cis_associations_caqtl_position_branch() -> None:
     assert hits == [
         EqtlAssociation(3, 225972, None, 1, 629100, 0.05, 0.1, 0.06, "G", "T", "chr1_628997_629498")
     ]
-    assert any("split_part" in sql for sql, _ in log)
+    # Chromosome first, then the peak range — the rebuilt table's (chrom, start, "end") index.
+    peak_sql = next(sql for sql, _ in log if "chrom = %s AND start" in sql)
+    assert "split_part" not in peak_sql
+    assert 'AND "end" >= %s' in peak_sql
+
+
+def test_cis_associations_non_caqtl_never_takes_the_peak_branch() -> None:
+    """Only caQTL companions have chrom/start/end. A pQTL (or any other type) whose gene_id
+    column happens to be empty must still resolve through gencode_v39 -> gene_id, never query the
+    peak columns its table doesn't have."""
+
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("pQTL",)]
+        if "WHERE gene_id = %s" in sql:
+            return []  # gene_id unpopulated for this dataset -> simply no phenotypes matched
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    assert PostgresQtlRepository(factory).cis_associations(141510, 2) == []
+    assert not any("chrom = %s AND start" in sql for sql, _ in log)  # no peak lookup
+    assert not any("gencode_v39" in sql for sql, _ in log)  # no peak-only gene-coord lookup
+
+
+def test_phenotypes_for_gene_non_caqtl_never_takes_the_peak_branch() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("sQTL",)]
+        if "SELECT phenotype_id, gene_id" in sql:
+            assert params == ("141510",)
+            return [("chr17:clu_1:ENSG00000141510.18", "141510")]
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    gene = Gene(141510, "TP53", "ENSG00000141510.18", "17", 7_661_779, 7_677_434, "-")
+    summaries = PostgresQtlRepository(factory).phenotypes_for_gene(gene, 2)
+    assert [s.phenotype_id for s in summaries] == ["chr17:clu_1:ENSG00000141510.18"]
+    assert not any("chrom = %s AND start" in sql for sql, _ in log)
 
 
 def test_cis_associations_caqtl_unknown_gene_returns_empty_without_shard_query() -> None:
     def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
-        if "gene_id IS NOT NULL" in sql:
-            return []
-        return []  # gencode_v39 lookup also empty -> gene not found at all
+        if "d.qtl_type" in sql:
+            return [("caQTL",)]
+        return []  # gencode_v39 lookup empty -> gene not found at all
 
     factory, log = _routing_factory(responder)
     assert PostgresQtlRepository(factory).cis_associations(999999, 3) == []
     assert not any("phenotype_key = ANY" in sql for sql, _ in log)
 
 
+def test_phenotypes_for_gene_eqtl_and_sqtl_match_gene_id_without_shard_query() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("eQTL",)]
+        if "SELECT phenotype_id, gene_id" in sql:
+            assert params == ("141510",)
+            return [
+                ("ENSG00000141510.18", "141510"),
+                ("chr17:clu_1:ENSG00000141510.18", "141510"),
+            ]
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    gene = Gene(141510, "TP53", "ENSG00000141510.18", "17", 7_661_779, 7_677_434, "-")
+    summaries = PostgresQtlRepository(factory).phenotypes_for_gene(gene, 1)
+    assert [s.phenotype_id for s in summaries] == [
+        "ENSG00000141510.18",
+        "chr17:clu_1:ENSG00000141510.18",
+    ]
+    assert not any("FROM qtl_snp_1 s" in sql for sql, _ in log)
+
+
+def test_phenotypes_for_gene_caqtl_matches_gencode_start_inside_peak() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("caQTL",)]
+        if "chrom = %s AND start" in sql:
+            assert params == ("chr17", 7_661_779, 7_661_779)
+            return [(4, "chr17_7661000_7662000", None)]
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    gene = Gene(141510, "TP53", "ENSG00000141510.18", "17", 7_661_779, 7_677_434, "-")
+    summaries = PostgresQtlRepository(factory).phenotypes_for_gene(gene, 3)
+    assert [s.phenotype_id for s in summaries] == ["chr17_7661000_7662000"]
+    assert not any("FROM qtl_snp_3 s" in sql for sql, _ in log)
+
+
 def test_cis_associations_no_matching_phenotype_returns_empty() -> None:
     def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
-        if "gene_id IS NOT NULL" in sql:
-            return [(1,)]
+        if "d.qtl_type" in sql:
+            return [("eQTL",)]
         if "WHERE gene_id = %s" in sql:
             return []  # gene not tested in this dataset
         raise AssertionError(f"unexpected query: {sql}")
@@ -284,22 +381,22 @@ def test_cis_associations_no_matching_phenotype_returns_empty() -> None:
     assert not any("phenotype_key = ANY" in sql for sql, _ in log)
 
 
-def test_associations_for_phenotype_resolves_key_then_enriches() -> None:
-    """Phenotype-bounded (not window-bounded) — unlike associations_in_region, this affords the
-    variant_rsid_mapping_raw join (see its docstring for why: a region can span 100+ phenotypes,
-    too many to enrich wholesale, but one phenotype alone is cheap)."""
+def test_associations_for_phenotype_resolves_key_then_fetches_bounded_window() -> None:
 
     def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
         if "WHERE phenotype_id = %s" in sql:
             assert params == ("ENSG00000141510.18",)
             return [(7791, "141510")]
         if "phenotype_key = %s" in sql:
-            assert params == (7791,)
+            assert params == (7791, "17", 7_660_000, 7_690_000)
+            assert "s.chrom = %s" in sql and "s.position BETWEEN %s AND %s" in sql
             return [("17", 7670000, "0.001", "0.2", "0.05", "C", "T", "rs123")]
         raise AssertionError(f"unexpected query: {sql}")
 
     factory, log = _routing_factory(responder)
-    hits = PostgresQtlRepository(factory).associations_for_phenotype(1, "ENSG00000141510.18")
+    hits = PostgresQtlRepository(factory).associations_for_phenotype(
+        1, "ENSG00000141510.18", "17", 7_660_000, 7_690_000
+    )
     assert hits == [
         EqtlAssociation(
             1, 141510, 123, 17, 7670000, 0.001, 0.2, 0.05, "C", "T", "ENSG00000141510.18"
@@ -315,7 +412,12 @@ def test_associations_for_phenotype_unknown_id_returns_empty() -> None:
         raise AssertionError(f"unexpected query: {sql}")
 
     factory, log = _routing_factory(responder)
-    assert PostgresQtlRepository(factory).associations_for_phenotype(1, "nonexistent") == []
+    assert (
+        PostgresQtlRepository(factory).associations_for_phenotype(
+            1, "nonexistent", "17", 1, 2
+        )
+        == []
+    )
     assert not any("phenotype_key = %s" in sql for sql, _ in log)
 
 
@@ -331,7 +433,9 @@ def test_associations_for_phenotype_caqtl_null_gene_id_defaults_to_zero() -> Non
         raise AssertionError(f"unexpected query: {sql}")
 
     factory, _ = _routing_factory(responder)
-    hits = PostgresQtlRepository(factory).associations_for_phenotype(3, "chr1_628997_629498")
+    hits = PostgresQtlRepository(factory).associations_for_phenotype(
+        3, "chr1_628997_629498", "1", 628_000, 630_000
+    )
     assert hits == [
         EqtlAssociation(3, 0, None, 1, 629100, 0.05, 0.1, 0.06, "G", "T", "chr1_628997_629498")
     ]
@@ -370,7 +474,7 @@ def test_ld_r2_unknown_chrom_or_population_returns_empty_without_querying() -> N
 def test_tissues_with_signal() -> None:
     def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
         if "qtl_lists" in sql:
-            return [(1, "GTEx_v10", "eQTL", "ALL", "Whole_Blood", None)]
+            return [(1, "GTEx_v10", "eQTL", "ALL", "Whole_Blood", None, "GTEx_v10")]
         return [(1e-8,)]
 
     factory, _ = _routing_factory(responder)
@@ -401,6 +505,73 @@ def test_associations_in_region_multiple_overlapping_phenotypes() -> None:
     )
     hits = PostgresQtlRepository(factory).associations_in_region("17", 7_660_000, 7_690_000, 8)
     assert {a.phenotype_id for a in hits} == {"ENSG00000141510.18", "ENSG00000129195.16"}
+
+
+def test_phenotype_summaries_in_region_caqtl_matches_peaks_overlapping_the_window() -> None:
+    """Region mode must return the peaks whose OWN coordinates overlap the typed window — not the
+    ones whose tested variants merely reach into it (those sit up to a cis window, ~1 Mb, away)."""
+
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("caQTL",)]
+        if "chrom = %s AND start" in sql:
+            # overlap test: peak.start <= window end AND peak.end >= window start
+            assert params == ("chr17", 8_661_779, 6_661_179, 50)
+            return [(11, "chr17_6665950_6666451", None)]
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    summaries = PostgresQtlRepository(factory).phenotype_summaries_in_region(
+        "17", 6_661_179, 8_661_779, 8, 50
+    )
+    assert [s.phenotype_id for s in summaries] == ["chr17_6665950_6666451"]
+    assert summaries[0].lead_position is None and summaries[0].lead_pvalue is None
+    peak_sql = next(sql for sql, _ in log if "chrom = %s AND start" in sql)
+    # Ordered by position: ordering by the string phenotype_id makes LIMIT return an arbitrary
+    # slice of the window instead of its left edge.
+    assert "ORDER BY start" in peak_sql and "LIMIT %s" in peak_sql
+    # The shard's variant positions are never consulted for this list.
+    assert not any("DISTINCT s.phenotype_key" in sql for sql, _ in log)
+    assert not any("FROM qtl_snp_8 s" in sql for sql, _ in log)
+
+
+def test_phenotype_summaries_in_region_non_caqtl_goes_through_gencode() -> None:
+    """Gene-keyed datasets have no coordinates in their phenotype table: place them with the
+    window's overlapping gencode genes, then match those gene ids."""
+
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("eQTL",)]
+        if "gencode_v39" in sql:
+            assert params == ("chr17", 7_690_000, 7_660_000)
+            return [("141510",), ("141511",)]
+        if "gene_id = ANY" in sql:
+            assert params == (["141510", "141511"], 50)
+            return [("ENSG00000141510.18", "141510")]
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    summaries = PostgresQtlRepository(factory).phenotype_summaries_in_region(
+        "17", 7_660_000, 7_690_000, 1, 50
+    )
+    assert [s.phenotype_id for s in summaries] == ["ENSG00000141510.18"]
+    assert not any("chrom = %s AND start" in sql for sql, _ in log)  # no peak columns
+    assert not any("DISTINCT s.phenotype_key" in sql for sql, _ in log)
+
+
+def test_phenotype_summaries_in_region_no_genes_in_window_skips_phenotype_query() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("eQTL",)]
+        if "gencode_v39" in sql:
+            return []
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    assert (
+        PostgresQtlRepository(factory).phenotype_summaries_in_region("17", 1, 2, 1, 50) == []
+    )
+    assert not any("gene_id = ANY" in sql for sql, _ in log)
 
 
 def test_associations_for_rsid_resolves_via_mapping_table() -> None:

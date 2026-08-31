@@ -79,7 +79,7 @@ REGION_KEYWORDS: list[tuple[str, str]] = [
     ("adrenal", "adrenal_gland"),
     # Artery
     ("artery_coronary", "coronary_artery"),
-    ("artery_tibial", "artery"),  # "artery" (generic) is distinct from "aorta" in the SVG
+    ("artery_tibial", "artery"),
     ("artery", "aorta"),
     # Bladder — "Bladder" (GTEx) / "urinary_bladder" (male SVG) / "bladder" (female SVG, aliased
     # to "urinary_bladder" client-side — see body-map.js's ORGAN_ALIASES) are all the same organ.

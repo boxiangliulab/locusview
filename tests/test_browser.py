@@ -45,8 +45,11 @@ def test_browser_renders_picker_shell() -> None:
     assert 'id="gwas-rows"' in html and 'id="gwas-add-row"' in html
     assert 'id="gwas-row-template"' in html
     assert 'id="db-run"' in html
+    assert 'id="db-gene-links"' in html
     assert "/static/js/browser-picker.js" in html
     assert "/static/js/browser.js" in html
+    # Per-plot "download as SVG" button for each locuszoom panel (static/js/plot-download.js).
+    assert "/static/js/plot-download.js" in html
 
 
 def test_browser_defaults_to_first_qtl_dataset_preselected() -> None:
@@ -102,6 +105,24 @@ def test_qtl_dataset_names() -> None:
     response = _client().get("/api/browser/qtl/datasets")
     assert response.status_code == 200
     assert response.json() == ["GTEx_v10"]
+
+
+def test_qtl_catalog_endpoints_handle_hyphenated_dataset_name() -> None:
+    repo = FakeQtlRepository(
+        datasets=[
+            Dataset(5, "INTERVAL", "eQTL-Catalogue-eQTL-EUR", "INTERVAL"),
+            Dataset(6, "INTERVAL", "eQTL-Catalogue-sQTL-EUR", "INTERVAL"),
+        ]
+    )
+    client = TestClient(create_app(repository=repo))
+    assert client.get("/api/browser/qtl/datasets").json() == ["eQTL-Catalogue"]
+    assert client.get(
+        "/api/browser/qtl/types", params={"dataset": "eQTL-Catalogue"}
+    ).json() == ["eQTL", "sQTL"]
+    assert client.get(
+        "/api/browser/qtl/contexts",
+        params={"dataset": "eQTL-Catalogue", "qtl_type": "sQTL"},
+    ).json() == [{"id": 6, "label": "INTERVAL"}]
 
 
 def test_qtl_types_for_dataset() -> None:

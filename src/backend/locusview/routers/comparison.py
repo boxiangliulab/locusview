@@ -17,17 +17,12 @@ from fastapi.responses import HTMLResponse
 
 from locusview.requestinfo import QtlRepository, RepositoryTimeoutError
 from locusview.templating import render as _render
-from locusview.viz import neg_log10_p
 
 _UNAVAILABLE_MESSAGE = (
     "<p class='muted'>This comparison needs a database index that hasn't been added yet "
     "(region/variant lookups aren't indexed the way gene lookups are) — see "
     "docs/process/status.md. Try comparing by gene instead.</p>"
 )
-
-# Genome-wide significance (matches the regional plot's dashed line) — used for the table's
-# "Sig." badge. No UI threshold control (yet); a fixed, well-known bar keeps this shippable.
-SIGNIFICANCE_THRESHOLD = 5e-8
 
 
 def _parse_dataset_keys(datasets: str) -> tuple[list[int], list[int]]:
@@ -68,8 +63,7 @@ def router(repo: QtlRepository) -> APIRouter:
         gwas_by_id = {g.id: g for g in repo.gwas_datasets()}
 
         title = f"chr{chrom}:{position}"
-        # (log_pvalue, row) pairs, so the sort key stays a plain float | None (not dict[str,
-        # object]) — mirrors how routers/locus.py avoids the same mypy pitfall.
+        # (pvalue, row) pairs keep sorting separate from the display-row dictionary.
         entries: list[tuple[float | None, dict[str, object]]] = []
         try:
             for did in qtl_ids:
@@ -77,17 +71,13 @@ def router(repo: QtlRepository) -> APIRouter:
                 if dataset is None:
                     continue
                 for qtl_hit in repo.associations_in_region(chrom, position, position, did):
-                    log_p = neg_log10_p(qtl_hit.pvalue)
                     entries.append(
                         (
-                            log_p,
+                            qtl_hit.pvalue,
                             {
                                 "tissue": f"{dataset.tissue} ({dataset.source})",
                                 "kind": "QTL",
-                                "log_pvalue": log_p,
                                 "pvalue": qtl_hit.pvalue,
-                                "significant": qtl_hit.pvalue is not None
-                                and qtl_hit.pvalue < SIGNIFICANCE_THRESHOLD,
                             },
                         )
                     )
@@ -97,17 +87,13 @@ def router(repo: QtlRepository) -> APIRouter:
                     continue
                 for gwas_hit in repo.gwas_associations_in_region(chrom, position, position, did):
                     trait = gwas_dataset.trait.replace("_", " ")
-                    log_p = neg_log10_p(gwas_hit.pvalue)
                     entries.append(
                         (
-                            log_p,
+                            gwas_hit.pvalue,
                             {
                                 "tissue": f"{trait} ({gwas_dataset.population})",
                                 "kind": "GWAS",
-                                "log_pvalue": log_p,
                                 "pvalue": gwas_hit.pvalue,
-                                "significant": gwas_hit.pvalue is not None
-                                and gwas_hit.pvalue < SIGNIFICANCE_THRESHOLD,
                             },
                         )
                     )
@@ -115,7 +101,7 @@ def router(repo: QtlRepository) -> APIRouter:
             return HTMLResponse(_UNAVAILABLE_MESSAGE, status_code=503)
 
         # Most significant (lowest p) first; associations with no p-value sort last.
-        entries.sort(key=lambda e: (e[0] is None, -(e[0] or 0)))
+        entries.sort(key=lambda e: (e[0] is None, e[0] or 0))
         rows = [row for _, row in entries]
 
         return _render(

@@ -1,4 +1,4 @@
-{# Available-datasets table (Home page). Context: dataset_rows = [{source, label, population, n_tissues}]. #}
+{# Available-datasets table (Home page). Context: dataset_rows includes n_subdatasets. #}
 <div class="dataset-table-wrap">
   {% if dataset_rows %}
   <table class="dataset-table">
@@ -7,7 +7,7 @@
         <th>Dataset</th>
         <th>Data type</th>
         <th>Population</th>
-        <th>Tissues / contexts</th>
+        <th>Number of sub-datasets</th>
       </tr>
     </thead>
     <tbody>
@@ -18,7 +18,7 @@
         </td>
         <td><span class="badge badge-blue">{{ row.qtl_type }}</span></td>
         <td class="mono muted">{{ row.population }}</td>
-        <td>{{ row.n_tissues }} tissue{{ 's' if row.n_tissues != 1 else '' }}</td>
+        <td>{{ row.n_subdatasets }}</td>
       </tr>
       {% endfor %}
     </tbody>

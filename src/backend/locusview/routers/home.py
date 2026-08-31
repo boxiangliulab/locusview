@@ -21,28 +21,28 @@ from locusview.templating import render as _render
 # source string rather than inventing a description for a dataset we don't actually know about.
 _SOURCE_LABELS: dict[str, str] = {
     "gtex": "Genotype-Tissue Expression",
+    "eqtl-catalogue": "eQTL Catalogue",
 }
 
 
 def _dataset_table(datasets: list[Dataset]) -> list[dict[str, object]]:
     """Group the flat per-tissue catalog by ``source`` into one row per integrated dataset."""
-    tissues_by_source: dict[str, list[str]] = {}
+    subdatasets_by_source: dict[str, list[Dataset]] = {}
     for d in datasets:
-        tissues_by_source.setdefault(d.source, []).append(d.tissue)
+        subdatasets_by_source.setdefault(d.source, []).append(d)
 
     rows = []
-    for source, tissues in sorted(tissues_by_source.items()):
-        parts = source.split("-")  # source = "{dataset}-{type}-{population}"
-        qtl_type = parts[1] if len(parts) == 3 else "QTL"
-        population = parts[2] if len(parts) == 3 else ""
-        prefix = parts[0].lower()
+    for source, subdatasets in sorted(subdatasets_by_source.items()):
+        dataset, qtl_type, population = subdatasets[0].catalog_parts
         rows.append(
             {
                 "source": source,
-                "label": _SOURCE_LABELS.get(prefix, parts[0]),
+                "label": _SOURCE_LABELS.get(dataset.lower(), dataset),
                 "qtl_type": qtl_type,
                 "population": population,
-                "n_tissues": len(tissues),
+                # repo.datasets() contains one row per ready qtl_lists row, so this is the live
+                # database count of materialized sub-datasets, not a static tissue count.
+                "n_subdatasets": len(subdatasets),
             }
         )
     return rows

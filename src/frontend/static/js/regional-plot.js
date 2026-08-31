@@ -43,7 +43,7 @@ const LocusPlot = (() => {
     const layout = {
       margin: { t: 8, r: 8, b: 44, l: 56 }, hovermode: "closest",
       xaxis: { title: "chr" + data.region.chrom + " (Mb)", gridcolor: "#f1f5f9", zeroline: false },
-      yaxis: { title: "−log₁₀(p)", gridcolor: "#f1f5f9", zeroline: false },
+      yaxis: { title: "-log10(P)", gridcolor: "#f1f5f9", zeroline: false },
       plot_bgcolor: "#ffffff", paper_bgcolor: "#ffffff", font: { color: "#334155", size: 12 },
       shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 7.301, y1: 7.301,
                  line: { color: "#94a3b8", width: 1, dash: "dot" } }],
@@ -89,6 +89,13 @@ const LocusPlot = (() => {
       state.data = await resp.json();
       render(state);
     } catch (e) {
+      // Purge before wiping the node: Plotly leaves gd.data/gd.layout on the div otherwise, and
+      // the "↓ SVG" button (plot-download.js) would happily export the *previous* tissue's plot.
+      try {
+        Plotly.purge(state.plotDiv);
+      } catch {
+        /* nothing plotted yet — nothing to purge */
+      }
       state.plotDiv.innerHTML = "<p class='muted'>No plot data for this tissue.</p>";
     }
     state.plotDiv.style.opacity = "1";
@@ -105,6 +112,13 @@ const LocusPlot = (() => {
       data: null,
       clickBound: false,
     };
+    // Bottom-right "↓ SVG" export for this panel (static/js/plot-download.js); named from the
+    // region + tissue currently plotted, so consecutive downloads don't overwrite each other.
+    PlotDownload.attach(state.plotDiv, () => {
+      const r = state.data && state.data.region;
+      const tissue = state.tissueSel.selectedOptions[0]?.text || "";
+      return r ? `chr${r.chrom}_${r.start}-${r.end}_${tissue}` : tissue;
+    });
     state.tissueSel.addEventListener("change", () => load(state));
     state.popSel.addEventListener("change", () => load(state));
     if (state.tissueSel.options.length) load(state);

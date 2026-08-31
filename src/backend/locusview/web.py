@@ -24,6 +24,7 @@ from locusview.routers import home as home_router
 from locusview.routers import locus as locus_router
 from locusview.routers import news as news_router
 from locusview.routers import search as search_router
+from locusview.routers import tutorial as tutorial_router
 
 # static/ lives in the sibling frontend/ folder (src/backend/locusview/web.py -> src/backend/
 # -> src/ -> src/frontend/static), not inside this package — see docs/process/status.md's
@@ -51,6 +52,7 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.include_router(home_router.router(repo))
     app.include_router(news_router.router(repo))
+    app.include_router(tutorial_router.router(repo))
     app.include_router(gene_router.router(repo))
     app.include_router(locus_router.router(repo))
     app.include_router(browser_router.router(repo))

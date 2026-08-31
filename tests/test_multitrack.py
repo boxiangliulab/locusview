@@ -23,9 +23,12 @@ def _client() -> TestClient:
         ],
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
         associations=[
-            EqtlAssociation(1, 141510, None, 17, 7_670_000, 1e-30, 0.5, 0.05),  # lead, ds 1
-            EqtlAssociation(1, 141510, None, 17, 7_671_000, 1e-3, 0.1, 0.05),
-            EqtlAssociation(2, 141510, None, 17, 7_670_000, 0.5, 0.1, 0.05),  # ds 2, not sig
+            EqtlAssociation(1, 141510, None, 17, 7_670_000, 1e-30, 0.5, 0.05,
+                            phenotype_id="ENSG00000141510.18"),
+            EqtlAssociation(1, 141510, None, 17, 7_671_000, 1e-3, 0.1, 0.05,
+                            phenotype_id="ENSG00000141510.18"),
+            EqtlAssociation(2, 141510, None, 17, 7_670_000, 0.5, 0.1, 0.05,
+                            phenotype_id="ENSG00000141510.18"),
         ],
         gwas_datasets=[GwasDataset(1, "Basophil_count", "EUR", "GWAS Catalog", "GCST90002379")],
         gwas_associations=[
@@ -44,6 +47,7 @@ def test_multi_track_gene_mode_qtl_and_gwas() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["label"] == "TP53"
+    assert body["gene"] == {"symbol": "TP53", "ensembl_id": "ENSG00000141510.16"}
     assert body["region"]["chrom"] == "17"
     keys = [t["key"] for t in body["tracks"]]
     assert keys == ["qtl:1", "gwas:1"]
@@ -51,14 +55,30 @@ def test_multi_track_gene_mode_qtl_and_gwas() -> None:
     qtl_track = body["tracks"][0]
     assert qtl_track["kind"] == "qtl"
     assert "Whole_Blood" in qtl_track["label"]
-    assert qtl_track["lead"]["position"] == 7_670_000
-    assert len(qtl_track["variants"]) == 2
+    assert qtl_track["lead"] is None
+    assert qtl_track["variants"] == []
+    assert [p["phenotype_id"] for p in qtl_track["phenotypes"]] == ["ENSG00000141510.18"]
 
     gwas_track = body["tracks"][1]
     assert gwas_track["kind"] == "gwas"
     assert "Basophil count" in gwas_track["label"] and "EUR" in gwas_track["label"]
     assert gwas_track["lead"]["position"] == 7_670_500
     assert len(gwas_track["variants"]) == 1  # the out-of-window point is dropped
+
+
+def test_multi_track_non_gene_mode_has_no_external_gene_target() -> None:
+    response = _client().get(
+        "/api/locus/multi-track",
+        params={
+            "locus_mode": "region",
+            "chrom": "17",
+            "start": 7_660_000,
+            "end": 7_690_000,
+            "datasets": "qtl:1",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["gene"] is None
 
 
 def test_multi_track_gene_mode_window_is_start_plus_minus_1mb() -> None:
@@ -72,7 +92,7 @@ def test_multi_track_gene_mode_window_is_start_plus_minus_1mb() -> None:
     assert region["end"] == 7_661_779 + 1_000_000
 
 
-def test_multi_track_gene_mode_drops_variants_outside_the_1mb_window() -> None:
+def test_multi_track_gene_mode_defers_all_variants_until_phenotype_selection() -> None:
     repo = FakeQtlRepository(
         datasets=[Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL")],
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
@@ -86,10 +106,10 @@ def test_multi_track_gene_mode_drops_variants_outside_the_1mb_window() -> None:
         params={"locus_mode": "gene", "gene": "TP53", "datasets": "qtl:1"},
     )
     variants = response.json()["tracks"][0]["variants"]
-    assert [v["position"] for v in variants] == [7_670_000]
+    assert variants == []
 
 
-def test_multi_track_qtl_variants_carry_rs_id_and_variant_id_when_present() -> None:
+def test_multi_track_gene_mode_does_not_eagerly_send_enriched_variants() -> None:
     repo = FakeQtlRepository(
         datasets=[Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL")],
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
@@ -101,14 +121,10 @@ def test_multi_track_qtl_variants_carry_rs_id_and_variant_id_when_present() -> N
         "/api/locus/multi-track",
         params={"locus_mode": "gene", "gene": "TP53", "datasets": "qtl:1"},
     )
-    variant = response.json()["tracks"][0]["variants"][0]
-    assert variant["rs_id"] == 12345
-    assert variant["variant_id"] == "chr17_7670000_C_T"
+    assert response.json()["tracks"][0]["variants"] == []
 
 
-def test_multi_track_qtl_variants_carry_phenotype_id() -> None:
-    """Each variant's own phenotype_id — lets the frontend filter a track down to one selected
-    phenotype client-side (static/js/multi-track-plot.js's renderQtlPanels), no second fetch."""
+def test_multi_track_gene_mode_returns_phenotype_id_before_variant_data() -> None:
     repo = FakeQtlRepository(
         datasets=[Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL")],
         genes=[Gene(141510, "TP53", "ENSG00000141510.16", "17", 7_661_779, 7_687_550, "?")],
@@ -123,8 +139,9 @@ def test_multi_track_qtl_variants_carry_phenotype_id() -> None:
         "/api/locus/multi-track",
         params={"locus_mode": "gene", "gene": "TP53", "datasets": "qtl:1"},
     )
-    variant = response.json()["tracks"][0]["variants"][0]
-    assert variant["phenotype_id"] == "ENSG00000141510.18"
+    track = response.json()["tracks"][0]
+    assert track["variants"] == []
+    assert track["phenotypes"][0]["phenotype_id"] == "ENSG00000141510.18"
 
 
 def test_multi_track_qtl_track_carries_dataset_metadata() -> None:
@@ -172,7 +189,7 @@ def test_multi_track_qtl_track_groups_variants_by_phenotype() -> None:
         for p in phenotypes
         if p["phenotype_id"] == "chr17:7670000:7671000:clu_1:ENSG00000141510.18"
     )
-    assert lead["lead_position"] == 7_670_000 and lead["n"] == 1
+    assert lead["lead_position"] is None and lead["lead_pvalue"] is None
 
 
 def test_multi_track_gwas_track_has_no_phenotypes_key() -> None:
@@ -220,7 +237,8 @@ def test_multi_track_qtl_track_is_gene_scoped_not_window_scoped() -> None:
     )
     body = response.json()
     assert len(body["tracks"]) == 1
-    assert body["tracks"][0]["lead"]["position"] == 7_670_000
+    assert body["tracks"][0]["lead"] is None
+    assert body["tracks"][0]["phenotypes"][0]["phenotype_id"] == "ENSG00000141510.18"
 
 
 def test_multi_track_empty_datasets_is_400() -> None:

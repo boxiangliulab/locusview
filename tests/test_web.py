@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from locusview import __version__
 from locusview.requestinfo import FakeQtlRepository, Gene
+from locusview.templating import asset
 from locusview.web import create_app
 
 # Always pass an explicit repository — a bare create_app() falls back to _default_repository(),
@@ -81,3 +82,25 @@ def test_search_unsupported_query_is_404() -> None:
     response = client.get("/search", params={"q": "???"}, follow_redirects=False)
     assert response.status_code == 404
     assert "gene, region, or variant" in response.text.lower()
+
+
+# ── static-asset cache busting (templating.asset) ─────────────────────────────
+
+
+def test_asset_urls_carry_a_modification_time_stamp() -> None:
+    """Every static URL is ?v=<mtime>-stamped so an edited JS/CSS file can't be served from a
+    browser's heuristic cache (StaticFiles sends no Cache-Control) — see templating.asset."""
+    url = asset("js/plot-download.js")
+    assert url.startswith("/static/js/plot-download.js?v=")
+    assert int(url.rsplit("=", 1)[1]) > 0
+
+
+def test_asset_url_for_a_missing_file_still_renders() -> None:
+    """A typo'd asset name must 404 loudly in the browser, not blow up the whole page render."""
+    assert asset("js/nope.js") == "/static/js/nope.js?v=0"
+
+
+def test_pages_reference_stamped_asset_urls() -> None:
+    html = client.get("/browser").text
+    assert "/static/js/browser.js?v=" in html
+    assert "/static/css/base.css?v=" in html

@@ -29,7 +29,8 @@ def test_home_groups_datasets_by_source() -> None:
     ).get("/")
     assert response.status_code == 200
     assert "Genotype-Tissue Expression" in response.text
-    assert "3 tissues" in response.text  # grouped by source, not one row per tissue
+    assert "Number of sub-datasets" in response.text
+    assert "<td>3</td>" in response.text  # live count of rows grouped under this dataset
 
 
 def test_home_shows_correct_qtl_type_badge() -> None:
@@ -41,6 +42,19 @@ def test_home_shows_correct_qtl_type_badge() -> None:
     ).get("/")
     assert 'badge-blue">eQTL<' in response.text
     assert 'badge-blue">sQTL<' in response.text
+
+
+def test_home_handles_hyphenated_eqtl_catalogue_dataset_name() -> None:
+    response = _client(
+        [
+            Dataset(5, "INTERVAL", "eQTL-Catalogue-eQTL-EUR", "INTERVAL"),
+            Dataset(6, "INTERVAL", "eQTL-Catalogue-sQTL-EUR", "INTERVAL"),
+        ]
+    ).get("/")
+    assert response.text.count("eQTL Catalogue") == 2
+    assert 'badge-blue">eQTL<' in response.text
+    assert 'badge-blue">sQTL<' in response.text
+    assert response.text.count("<td>1</td>") == 2
 
 
 def test_home_unknown_source_falls_back_to_raw_string() -> None:
@@ -75,6 +89,8 @@ def test_home_has_no_hero_badge() -> None:
     response = _client([]).get("/")
     assert "QTL &amp; GWAS Browser" not in response.text
     assert "hero-badge" not in response.text
+    assert "QTL + GWAS" not in response.text
+    assert "Data types" not in response.text
 
 
 # ── GWAS dataset table ───────────────────────────────────────────────────────
@@ -130,6 +146,7 @@ def test_body_map_leader_line_scaffold_present() -> None:
     assert 'id="body-map-labels-left"' in html and 'id="body-map-labels-right"' in html
     assert 'id="body-map-leaders"' in html
     assert 'id="body-map-panel-table"' in html and 'id="body-map-panel-tbody"' in html
+    assert 'id="body-map-panel-results"' in html
 
 
 def test_body_map_has_no_ebi_licence_badge() -> None:
@@ -159,6 +176,15 @@ def test_body_map_maps_both_blood_spellings_to_the_same_region() -> None:
     ).get("/")
     assert '"other":' not in response.text.replace(" ", "")
     assert '"level_1": "Blood"' in response.text  # landed under "blood", not "other"
+
+
+def test_body_map_maps_tibial_artery_to_systemic_artery() -> None:
+    response = _client(
+        qtl_contexts=[QtlContextEntry(1, "Artery_Tibial", None, "GTEx_v10-eQTL-ALL")]
+    ).get("/")
+    compact = response.text.replace(" ", "")
+    assert '"artery":' in compact
+    assert '"level_1":"Artery_Tibial"' in compact
 
 
 def test_body_map_unmapped_tissue_falls_back_to_other() -> None:

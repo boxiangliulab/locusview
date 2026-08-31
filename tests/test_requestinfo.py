@@ -122,6 +122,49 @@ def test_fake_associations_in_region() -> None:
     assert [a.rs_id for a in hits] == [1, 2]
 
 
+def test_fake_phenotype_summaries_in_region_places_phenotypes_by_their_own_feature() -> None:
+    """The exact bug seen live on chr17:6661179-8661779: a caQTL peak a megabyte to the LEFT of
+    the window whose tested variants reach into it must not be listed, while a peak that really
+    overlaps must be — see PostgresQtlRepository.phenotype_summaries_in_region."""
+    repo = FakeQtlRepository(
+        datasets=[Dataset(1, "cMono_CD14", "CIMA-caQTL-EAS")],
+        associations=[
+            # peak sits at 5.66 Mb; this tested variant reaches into the window
+            EqtlAssociation(
+                1, 0, None, 17, 6_665_497, 0.01, 0.1, 0.05, phenotype_id="chr17_5665386_5665629"
+            ),
+            # peak genuinely overlaps the window
+            EqtlAssociation(
+                1, 0, None, 17, 6_670_000, 0.02, 0.1, 0.05, phenotype_id="chr17_6665950_6666451"
+            ),
+        ],
+    )
+    summaries = repo.phenotype_summaries_in_region("17", 6_661_179, 8_661_779, 1)
+    assert [s.phenotype_id for s in summaries] == ["chr17_6665950_6666451"]
+
+
+def test_fake_phenotype_summaries_in_region_places_gene_phenotypes_by_gene_coords() -> None:
+    """Gene-keyed phenotypes are placed by the gene's own span, not by variant positions."""
+    repo = FakeQtlRepository(
+        datasets=[Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL")],
+        genes=[
+            Gene(141510, "TP53", "ENSG00000141510.18", "17", 7_661_779, 7_687_550, "-"),
+            Gene(999, "FARAWAY", "ENSG00000000999.1", "17", 1_000_000, 1_010_000, "+"),
+        ],
+        associations=[
+            EqtlAssociation(
+                1, 141510, None, 17, 7_670_000, 0.01, 0.1, 0.05, phenotype_id="ENSG00000141510.18"
+            ),
+            # variant lands inside the window, but its gene is a long way outside it
+            EqtlAssociation(
+                1, 999, None, 17, 7_670_500, 0.02, 0.1, 0.05, phenotype_id="ENSG00000000999.1"
+            ),
+        ],
+    )
+    summaries = repo.phenotype_summaries_in_region("17", 7_660_000, 7_690_000, 1)
+    assert [s.phenotype_id for s in summaries] == ["ENSG00000141510.18"]
+
+
 def test_fake_associations_for_rsid() -> None:
     repo = FakeQtlRepository(
         associations=[

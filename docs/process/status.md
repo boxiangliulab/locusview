@@ -53,6 +53,36 @@ points at the new Postgres DB (`PostgresQtlRepository`) by default; the old
   unpublished (as is right), which is all the original "not exposed" finding actually established.
   The tunnel still works if you prefer it; it's just unnecessary. All `connectpostgres.py` query
   logic has been verified against real data over the direct connection.
+- **caQTL phenotype tables rebuilt (2026-08-18).** The six caQTL shards' companions
+  (`qtl_snp_3..8_phenotype` — CIMA 3-7, Tenk10k 8) now carry the peak coordinates as real columns,
+  `(id, phenotype_id, gene_id, chrom, start, end)` with `chrom` in `"chr1"` form, plus an
+  `ix_qtl_snp_{id}_phenotype_locus` index on `(chrom, start, "end")`. `PostgresQtlRepository`
+  matches peaks through `_peak_phenotypes()` — **chromosome first, then the peak range** — instead
+  of parsing `phenotype_id` with `split_part`, which no index could serve. Measured server-side on
+  the live DB (`EXPLAIN (ANALYZE, BUFFERS)`, gene start inside a chr1 peak): shard 3 16.6 ms /
+  2004 buffers -> 0.056 ms / 4 buffers; shard 8 34.5 ms / 7642 buffers -> 0.046 ms / 3 buffers.
+  Identical rows for all 10 checked gene x dataset pairs. **eQTL/sQTL/pQTL and any other type keep
+  the original three columns and must never take that branch** — they resolve phenotypes purely
+  through `gencode_v39` -> the phenotype table's `gene_id`. So the branch is now keyed on the
+  catalog's `qtl_datasets.qtl_type` (`_is_peak_dataset()`), replacing the old
+  `_phenotype_uses_gene_id()` probe: inferring "peak-shaped" from an all-NULL `gene_id` column
+  would send a non-caQTL dataset ingested without gene ids down the peak path, querying columns its
+  table doesn't have. Verified live: `qtl_type = 'caQTL'` is exactly shards 3-8, which is exactly
+  the set of `_phenotype` tables carrying `chrom`.
+- **Region mode was listing phenotypes from outside the window (fixed 2026-08-18).** Reported on
+  `chr17:6661179-8661779`. `phenotype_summaries_in_region()` picked phenotypes by *variant*
+  position — `SELECT DISTINCT phenotype_key FROM qtl_snp_{id} WHERE position BETWEEN ...` — but a
+  cis window reaches ~1 Mb past the feature, so peaks/genes well outside the typed region matched
+  because their tested variants reached into it. Confirmed live: peak `chr17_5665386_5665629` (a
+  megabase to the left) matched on variants spanning 4,666,082-6,665,497. Compounded by
+  `ORDER BY phenotype_id` — a *string* sort, so those out-of-window peaks sorted first and filled
+  the whole `LIMIT 50`: the Tenk10k panel showed 50 phenotypes of which **0** overlapped, hiding
+  all 596 that did. Now each phenotype is placed by its **own** coordinates: caQTL peaks straight
+  off the `(chrom, start, "end")` index, everything else via `gencode_v39`'s overlapping genes ->
+  `gene_id`. The shard's variant positions aren't consulted for this list at all. Server-side cost
+  went 2224 ms / 924k buffers -> 0.244 ms / 11 buffers. Ordering is now by position, so the QTL
+  results table says "showing the first 50 in this window", not "top 50 by significance" (these
+  summaries carry no p-value — values load when a row is checked).
 - Password for the new DB lives in local `.env` (gitignored) — not yet in a secret store; do that
   before any real deployment (mirror how `LOCUSCOMPARE2_DB_PASSWORD` was handled for MySQL).
 

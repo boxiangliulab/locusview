@@ -7,7 +7,7 @@ more datasets get ingested) and deliberately live per-request (not cached), so a
 dataset shows up without a deploy.
 
 No new repository/SQL methods needed: every level is a grouping of ``repo.datasets()`` /
-``repo.gwas_datasets()`` (``Dataset.source`` is ``"{dataset}-{qtltype}-{population}"``), called
+``repo.gwas_datasets()`` (parsed via ``Dataset.catalog_parts``), called
 fresh on every request.
 """
 
@@ -22,7 +22,7 @@ from locusview.templating import render as _render
 
 def _qtl_dataset_names(datasets: list[Dataset]) -> list[str]:
     """Distinct QTL dataset names (the picker's first dropdown), e.g. ``["GTEx_v10", "CIMA"]``."""
-    return sorted({d.source.split("-")[0] for d in datasets})
+    return sorted({d.catalog_parts[0] for d in datasets})
 
 
 def _qtl_types(datasets: list[Dataset], dataset: str) -> list[str]:
@@ -30,9 +30,9 @@ def _qtl_types(datasets: list[Dataset], dataset: str) -> list[str]:
     ``["eQTL", "sQTL"]`` for ``GTEx_v10``."""
     types: set[str] = set()
     for d in datasets:
-        parts = d.source.split("-")
-        if len(parts) == 3 and parts[0] == dataset:
-            types.add(parts[1])
+        dataset_name, qtl_type, _ = d.catalog_parts
+        if dataset_name == dataset:
+            types.add(qtl_type)
     return sorted(types)
 
 
@@ -42,8 +42,8 @@ def _qtl_contexts(datasets: list[Dataset], dataset: str, qtl_type: str) -> list[
     ``datasets()``) — so nothing to reformat here."""
     options = []
     for d in datasets:
-        parts = d.source.split("-")
-        if len(parts) == 3 and parts[0] == dataset and parts[1] == qtl_type:
+        dataset_name, dataset_qtl_type, _ = d.catalog_parts
+        if dataset_name == dataset and dataset_qtl_type == qtl_type:
             options.append({"id": d.id, "label": d.tissue})
     return sorted(options, key=lambda o: str(o["label"]))
 
@@ -75,10 +75,8 @@ def _preselected_qtl_rows(
         d = by_id.get(id_)
         if d is None:
             continue
-        parts = d.source.split("-")
-        if len(parts) != 3:
-            continue
-        key = (parts[0], parts[1])
+        dataset_name, qtl_type, _ = d.catalog_parts
+        key = (dataset_name, qtl_type)
         if key not in groups:
             groups[key] = []
             order.append(key)

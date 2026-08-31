@@ -144,7 +144,7 @@ const MultiTrackPlot = (() => {
       hovertemplate:
         "chr" + region.chrom + ":%{customdata[0]:,}<br>p=%{customdata[1]:.2e}" +
         (hasAnyRsid ? "<br>%{customdata[3]}" : "") +
-        (hasAnyLd ? "<br>r&sup2;=%{customdata[4]}" : "") +
+        (hasAnyLd ? "<br>r<sup>2</sup>=%{customdata[4]}" : "") +
         "<extra></extra>",
     };
     const layout = {
@@ -156,7 +156,7 @@ const MultiTrackPlot = (() => {
         gridcolor: "#f1f5f9",
         zeroline: false,
       },
-      yaxis: { title: "&minus;log&#8321;&#8320;(p)", gridcolor: "#f1f5f9", zeroline: false },
+      yaxis: { title: "-log10(P)", gridcolor: "#f1f5f9", zeroline: false },
       plot_bgcolor: "#ffffff",
       paper_bgcolor: "#ffffff",
       font: { color: "#334155", size: 11 },
@@ -165,6 +165,10 @@ const MultiTrackPlot = (() => {
       ],
     };
     Plotly.newPlot(plotDiv, [trace], layout, { responsive: true, displayModeBar: false });
+    // Bottom-right "↓ SVG" export for this panel (static/js/plot-download.js). Attached after
+    // newPlot so the export always sees a plotted div; it wraps plotDiv rather than living inside
+    // it, so purgePanels()'s Plotly.purge() can't strip the button.
+    PlotDownload.attach(plotDiv, () => `${track.kind}_chr${region.chrom}_${track.label}`);
 
     if (track.kind === "qtl" && onPointClick) {
       plotDiv.on("plotly_click", (ev) => {
@@ -266,7 +270,7 @@ const MultiTrackPlot = (() => {
       <div class="card" style="padding:0;overflow:hidden">
         <div style="padding:14px 18px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink)">
           QTL results by phenotype
-          <span class="muted" style="font-weight:400;font-size:11px">${rows.length >= 50 ? "showing top 50 by significance — " : ""}check a row to plot its locuszoom</span>
+          <span class="muted" style="font-weight:400;font-size:11px">${rows.length >= 50 ? "showing the first 50 phenotype IDs — " : ""}check a row to load and plot its locuszoom</span>
         </div>
         <div class="table-wrap">
           <table class="data-table">
@@ -302,11 +306,8 @@ const MultiTrackPlot = (() => {
     }
   }
 
-  // Region/variant-mode QTL tracks never carry rs_id up front (associations_in_region isn't
-  // enriched — a window can span 100+ phenotypes, too big to enrich wholesale; see
-  // connectpostgres.py's associations_for_phenotype docstring). Gene-mode tracks (cis_associations)
-  // already have rs_id on every variant, so this is only called as a fallback when the
-  // client-filtered set below has none at all.
+  // Initial QTL searches return phenotype IDs only. Fetch one selected phenotype's bounded,
+  // enriched variant set on demand so large datasets never cross the wire before selection.
   async function fetchPhenotypeVariants(datasetId, phenotypeId, chrom, start, end) {
     try {
       const resp = await fetch(

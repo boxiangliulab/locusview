@@ -18,10 +18,21 @@ one, 2026-08 — see ``requestinfo.py``'s module docstring and ``docs/process/st
   ``gene_id`` is the truncated numeric Ensembl id (e.g. ``"287265"``), one row per (usually)
   several phenotypes per gene. For **caQTL-style** datasets (e.g. CIMA) ``gene_id`` is ``NULL`` on
   *every* row instead — phenotypes there are chromatin peaks, not genes, and ``phenotype_id`` is
-  shaped ``"chr_start_end"`` (e.g. ``"chr1_628997_629498"``). :meth:`_phenotype_uses_gene_id`
-  tells which mode a given dataset is in; :meth:`cis_associations` branches on it (matching by
-  ``gene_id``, or by the gene's start falling inside the peak's range — see its docstring).
-  ``phenotype_key`` on the shard is this table's ``id``.
+  shaped ``"chr_start_end"`` (e.g. ``"chr1_628997_629498"``). :meth:`_is_peak_dataset` tells which
+  mode a given dataset is in — from the catalog's ``qtl_type``, since only caQTL is peak-shaped;
+  :meth:`cis_associations` branches on it (matching by ``gene_id``, or by the gene's start falling
+  inside the peak's range — see its docstring). ``phenotype_key`` on the shard is this table's
+  ``id``.
+  The **caQTL** shards' companions were rebuilt (2026-08) with the peak coordinates as real
+  columns — ``(id, phenotype_id, gene_id, chrom, start, end)``, ``chrom`` in ``"chr1"`` form —
+  plus an ``ix_qtl_snp_{id}_phenotype_locus`` index on ``(chrom, start, "end")``. Peak lookups go
+  through :meth:`_peak_phenotypes`, which filters **chromosome first, then the peak range**, so
+  they ride that index instead of parsing ``phenotype_id`` with ``split_part`` (unindexable — it
+  scanned every peak row). **eQTL/sQTL/pQTL and every other type keep the original three columns**
+  and must never take that branch — they resolve phenotypes purely through ``gencode_v39`` ->
+  ``gene_id``. That's why the branch is keyed on ``qtl_type`` (:meth:`_is_peak_dataset`) and not
+  on ``gene_id`` being NULL: a non-caQTL dataset ingested with an empty ``gene_id`` column would
+  otherwise be sent down the peak path, querying columns its table doesn't have.
 - ``gencode_v39`` — the real gene-annotation table: ``(gene_id_key, gene_name, gene_id, chr,
   start, "end", strand)``, indexed on ``gene_id``/``gene_id_key``/``gene_name``/``(chr, start,
   end)``. ``gene_id_key`` is the bare numeric id matching the phenotype tables' ``gene_id`` (e.g.
@@ -78,7 +89,9 @@ from locusview.requestinfo import (
     Gene,
     GwasAssociation,
     GwasDataset,
+    PhenotypeSummary,
     QtlContextEntry,
+    RepositoryTimeoutError,
     Row,
     _to_float,
     _to_int,
@@ -93,6 +106,12 @@ def _shard_table(qtl_list_id: int) -> str:
     if not isinstance(qtl_list_id, int) or isinstance(qtl_list_id, bool) or qtl_list_id < 0:
         raise ValueError(f"qtl_list_id must be a non-negative int, got {qtl_list_id!r}")
     return f"qtl_snp_{qtl_list_id}"
+
+
+# ``qtl_datasets.qtl_type`` values whose phenotypes are chromatin peaks (``chr_start_end``) rather
+# than genes — the only ones whose ``_phenotype`` companion carries chrom/start/end columns. Every
+# other type resolves its phenotypes through gencode_v39's gene id. See :meth:`_is_peak_dataset`.
+_PEAK_QTL_TYPES = frozenset({"caqtl"})
 
 
 def _phenotype_table(qtl_list_id: int) -> str:
@@ -211,9 +230,18 @@ class PostgresQtlRepository:
         """Open a connection, run one query, close the connection — the one-shot path most
         methods use (multi-query methods open their own connection and call :meth:`_run`
         directly instead, to reuse it across queries)."""
-        conn = self._connect()
         try:
-            return self._run(conn, sql, params)
+            conn = self._connect()
+        except (TimeoutError, OSError) as exc:
+            raise RepositoryTimeoutError("database connection timed out") from exc
+        try:
+            try:
+                return self._run(conn, sql, params)
+            except (TimeoutError, OSError) as exc:
+                # pg8000 exposes socket read failures as built-in TimeoutError/OSError.  Convert
+                # them to the repository boundary the HTTP routes already handle; never reuse a
+                # connection whose protocol stream may now be out of sync.
+                raise RepositoryTimeoutError("database query timed out") from exc
         finally:
             conn.close()
 
@@ -224,7 +252,8 @@ class PostgresQtlRepository:
         exists, so this filters out "not ready yet" datasets (e.g. CIMA in dev, 2026-08)."""
         rows = self._query(
             "SELECT ql.id, qd.dataset, qd.qtl_type, qd.population, "
-            "coalesce(qc.level_1_context, ql.context) AS level_1, qc.level_2_context "
+            "coalesce(qc.level_1_context, ql.context) AS level_1, qc.level_2_context, "
+            "ql.source_project_id "
             "FROM qtl_lists ql "
             "JOIN qtl_datasets qd ON qd.id = ql.qtl_dataset_id "
             "LEFT JOIN qtl_contexts qc ON qc.qtl_list_id = ql.id "
@@ -234,7 +263,7 @@ class PostgresQtlRepository:
         )
         out = []
         for r in rows:
-            list_id, dataset, qtl_type, population, level_1, level_2 = r
+            list_id, dataset, qtl_type, population, level_1, level_2, source_project_id = r
             # The context label is level 2 when there is one, else level 1 — NOT both joined
             # (2026-08, by request): eQTL-style rows have only a tissue ("Whole_Blood"), while
             # caQTL-style rows add a cell type ("cMono_CD14") that's already the distinguishing
@@ -249,6 +278,9 @@ class PostgresQtlRepository:
                     id=int(list_id),
                     tissue=tissue,
                     source=f"{dataset}-{qtl_type}-{population}",
+                    source_project_id=str(source_project_id)
+                    if source_project_id is not None
+                    else None,
                 )
             )
         return out
@@ -302,14 +334,52 @@ class PostgresQtlRepository:
             strand=str(strand),
         )
 
-    def _phenotype_uses_gene_id(self, dataset_id: int) -> bool:
-        """Whether this dataset's phenotype table has a usable ``gene_id`` (eQTL/sQTL-style), or
-        it's ``NULL`` on every row (caQTL-style — phenotypes are peaks, not genes; see
-        :meth:`cis_associations`)."""
+    def _is_peak_dataset(self, dataset_id: int) -> bool:
+        """Whether this shard's phenotypes are chromatin **peaks** (caQTL) rather than genes.
+
+        Decided by the catalog's ``qtl_datasets.qtl_type``, *not* by whether ``gene_id`` happens
+        to be NULL: only the **caQTL** companions were rebuilt with ``chrom``/``start``/``end``
+        (2026-08), so every other QTL type — eQTL, sQTL, pQTL, whatever lands next — must take the
+        gene path even if its own ``gene_id`` column is unpopulated. Inferring "peak-shaped" from
+        NULL ``gene_id``s would send such a dataset down the peak branch and query columns its
+        table doesn't have.
+        """
         rows = self._query(
-            f"SELECT 1 FROM {_phenotype_table(dataset_id)} WHERE gene_id IS NOT NULL LIMIT 1", ()
+            "SELECT d.qtl_type FROM qtl_lists l JOIN qtl_datasets d ON d.id = l.qtl_dataset_id "
+            "WHERE l.id = %s LIMIT 1",
+            (dataset_id,),
         )
-        return bool(rows)
+        return bool(rows) and str(rows[0][0]).strip().lower() in _PEAK_QTL_TYPES
+
+    def _peak_phenotypes(
+        self, dataset_id: int, chrom: str, start: int, end: int, limit: int | None = None
+    ) -> list[Row]:
+        """``(id, phenotype_id, gene_id)`` for every caQTL peak **overlapping** ``[start, end]``.
+
+        Chromosome first, then the peak's range: that's exactly the ``(chrom, start, "end")``
+        index the rebuilt ``qtl_snp_{id}_phenotype`` tables carry (2026-08), so Postgres seeks
+        straight to the one chromosome's peaks instead of reading the table. The columns replace
+        the old ``split_part(phenotype_id, '_', n)`` parse of the ``chr_start_end`` peak ID, which
+        no index could serve — every caQTL lookup used to scan all ~115k-440k peak rows.
+
+        Overlap is the standard half-open-free test ``peak.start <= end AND peak.end >= start``.
+        Gene mode passes ``start == end == gene.start``, which collapses to "the peak contains this
+        gene's start" — the semantics :meth:`cis_associations` has always used.
+
+        Ordered by position, not by ``phenotype_id``: the IDs are strings, so ordering by them
+        sorts ``chr17_9...`` before ``chr17_10...`` and, worse, makes a ``LIMIT`` return an
+        arbitrary slice of the window rather than its left edge.
+        """
+        sql = (
+            f"SELECT id, phenotype_id, gene_id FROM {_phenotype_table(dataset_id)} "
+            f'WHERE chrom = %s AND start <= %s AND "end" >= %s '
+            f'ORDER BY start, "end"'
+        )
+        params: tuple[Any, ...] = (f"chr{chrom}", end, start)  # peak chrom uses the "chr1" form
+        if limit is not None:
+            sql += " LIMIT %s"
+            params += (limit,)
+        return self._query(sql, params)
 
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
@@ -341,13 +411,14 @@ class PostgresQtlRepository:
         set) — gene-anchored and bounded, so (unlike :meth:`associations_in_region` etc.) this
         affords enriching every row with ``rs_id``/``ref``/``alt``.
 
-        Two branches, decided by :meth:`_phenotype_uses_gene_id`:
+        Two branches, decided by :meth:`_is_peak_dataset`:
 
-        - eQTL/sQTL-style (phenotype table's ``gene_id`` populated): match ``phenotype.gene_id
-          == gene_id`` directly.
-        - caQTL-style (phenotype table's ``gene_id`` is ``NULL`` on every row): ``phenotype_id``
-          is a ``chr_start_end`` peak; match wherever this gene's start (from ``gencode_v39``,
-          via :meth:`_gene_by_key`) falls inside that range.
+        - **caQTL** (peaks, not genes): ``phenotype_id`` is a ``chr_start_end`` peak; match
+          wherever this gene's start (from ``gencode_v39``, via :meth:`_gene_by_key`) falls inside
+          that range, chromosome first — see :meth:`_peak_phenotypes`.
+        - **every other QTL type** (eQTL/sQTL/pQTL/...): the gene resolved from ``gencode_v39`` is
+          all that's needed — match ``phenotype.gene_id == gene_id`` directly. These tables have
+          no peak coordinates to match on.
 
         Both resolve matching ``phenotype_key``s *first*, then fetch shard rows bounded by that
         (small) key set via ``phenotype_key = ANY(...)`` — resolving a inline gene_id/position
@@ -357,20 +428,14 @@ class PostgresQtlRepository:
         steps separate keeps every step index-backed — confirmed fast (~100-200ms) either way.
         """
         shard, pheno = _shard_table(dataset_id), _phenotype_table(dataset_id)
-        if self._phenotype_uses_gene_id(dataset_id):
-            key_rows = self._query(
-                f"SELECT id, phenotype_id FROM {pheno} WHERE gene_id = %s", (str(gene_id),)
-            )
-        else:
+        if self._is_peak_dataset(dataset_id):
             gene = self._gene_by_key(gene_id)
             if gene is None:
                 return []
+            key_rows = self._peak_phenotypes(dataset_id, gene.chrom, gene.start, gene.start)
+        else:
             key_rows = self._query(
-                f"SELECT id, phenotype_id FROM {pheno} "
-                f"WHERE split_part(phenotype_id, '_', 1) = %s "
-                f"AND split_part(phenotype_id, '_', 2)::bigint <= %s "
-                f"AND split_part(phenotype_id, '_', 3)::bigint >= %s",
-                (f"chr{gene.chrom}", gene.start, gene.start),  # phenotype_id uses "chr1" form
+                f"SELECT id, phenotype_id FROM {pheno} WHERE gene_id = %s", (str(gene_id),)
             )
         phenotype_map = {int(r[0]): str(r[1]) for r in key_rows}
         if not phenotype_map:
@@ -470,12 +535,100 @@ class PostgresQtlRepository:
         )
         return [_row_to_eqtl(dataset_id, r) for r in rows]
 
+    def phenotype_summaries_in_region(
+        self, chrom: str, start: int, end: int, dataset_id: int, limit: int = 50
+    ) -> list[PhenotypeSummary]:
+        """Phenotypes whose OWN feature overlaps ``[start, end]``, without loading association
+        values. p-values and variant details are deliberately deferred until the user selects one.
+
+        "Overlaps" means the phenotype's own coordinates — the caQTL peak, or the gene — intersect
+        the window, which is what a user typing ``chr17:6661179-8661779`` is asking for:
+
+        - **caQTL**: peaks straight out of the rebuilt ``_phenotype`` table's ``(chrom, start,
+          "end")`` index (:meth:`_peak_phenotypes`).
+        - **every other type**: the window's overlapping genes from ``gencode_v39`` (its own
+          ``(chr, start, end)`` index), then the phenotype rows carrying those ``gene_id``s —
+          the same gencode-then-gene_id path :meth:`phenotypes_for_gene` uses, just for a window's
+          worth of genes instead of one.
+
+        This deliberately does NOT go through the shard's variant positions the way
+        :meth:`associations_in_region` does. Matching "phenotypes with a tested variant inside the
+        window" pulls in phenotypes sitting up to a full cis window (~1 Mb) OUTSIDE it: their
+        variants reach in, but the peak/gene itself is nowhere near what the user typed. Confirmed
+        live on ``chr17:6661179-8661779`` — peak ``chr17_5665386_5665629`` (a megabyte to the left)
+        matched because its tested variants span 4,666,082-6,665,497, and since those out-of-window
+        peaks also sort first by ``phenotype_id``, all 50 rows of the Tenk10k panel were peaks that
+        didn't overlap the window at all, hiding every one of the 596 that did.
+        """
+        pheno = _phenotype_table(dataset_id)
+        if self._is_peak_dataset(dataset_id):
+            rows: list[Row] = [
+                (r[1], r[2]) for r in self._peak_phenotypes(dataset_id, chrom, start, end, limit)
+            ]
+        else:
+            gene_keys = [
+                str(r[0])
+                for r in self._query(
+                    "SELECT gene_id_key FROM gencode_v39 "
+                    'WHERE chr = %s AND start <= %s AND "end" >= %s ORDER BY start',
+                    (f"chr{chrom}", end, start),
+                )
+            ]
+            if not gene_keys:
+                return []
+            rows = self._query(
+                f"SELECT phenotype_id, gene_id FROM {pheno} WHERE gene_id = ANY(%s) "
+                f"ORDER BY phenotype_id LIMIT %s",
+                (gene_keys, limit),
+            )
+        return [
+            PhenotypeSummary(
+                phenotype_id=str(r[0]) if r[0] is not None else None,
+                gene_id=int(r[1]) if r[1] is not None else None,
+                lead_position=None,
+                lead_pvalue=None,
+                n=0,
+            )
+            for r in rows
+        ]
+
+    def phenotypes_for_gene(self, gene: Gene, dataset_id: int) -> list[PhenotypeSummary]:
+        """Resolve a gene to phenotype IDs only; association values are fetched after selection.
+
+        Only **caQTL** tables hold peaks: their ``chr_start_end`` phenotype IDs are matched when
+        the GENCODE gene start lies inside the peak (:meth:`_peak_phenotypes`). Every other QTL
+        type (eQTL/sQTL/pQTL/...) just matches the GENCODE gene's numeric ``gene_id_key`` against
+        the phenotype table's ``gene_id``. No shard rows are touched either way.
+        """
+        pheno = _phenotype_table(dataset_id)
+        rows: list[Row]
+        if self._is_peak_dataset(dataset_id):
+            # _peak_phenotypes selects (id, phenotype_id, gene_id); drop the shard key here.
+            peaks = self._peak_phenotypes(dataset_id, gene.chrom, gene.start, gene.start)
+            rows = [(r[1], r[2]) for r in peaks]
+        else:
+            rows = self._query(
+                f"SELECT phenotype_id, gene_id FROM {pheno} WHERE gene_id = %s "
+                "ORDER BY phenotype_id",
+                (str(gene.gene_id),),
+            )
+        return [
+            PhenotypeSummary(
+                phenotype_id=str(r[0]),
+                gene_id=_to_int(r[1]),
+                lead_position=None,
+                lead_pvalue=None,
+                n=0,
+            )
+            for r in rows
+        ]
+
     def associations_for_phenotype(
-        self, dataset_id: int, phenotype_id: str
+        self, dataset_id: int, phenotype_id: str, chrom: str, start: int, end: int
     ) -> list[EqtlAssociation]:
         """ALL variants tested for ONE phenotype (a gene's cis window, an sQTL splice cluster, or
-        a caQTL peak) — phenotype-bounded, so (like :meth:`cis_associations`) this affords
-        enriching every row with ``rs_id``/``ref``/``alt``.
+        a caQTL peak), bounded to the displayed genomic window and enriched with
+        ``rs_id``/``ref``/``alt``.
 
         Backs the Data Browser's region/variant-mode locus tabs' per-phenotype locuszoom panel.
         :meth:`associations_in_region` itself deliberately stays unenriched — a region/variant
@@ -502,8 +655,9 @@ class PostgresQtlRepository:
             f"LEFT JOIN variant_rsid_mapping_raw v "
             f"ON v.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.ref || '_' "
             f"|| s.alt "
-            f"WHERE s.phenotype_key = %s",
-            (phenotype_key,),
+            f"WHERE s.phenotype_key = %s AND s.chrom = %s "
+            f"AND s.position BETWEEN %s AND %s",
+            (phenotype_key, chrom, start, end),
         )
         return [_row_to_eqtl_phenotype(dataset_id, gene_id, phenotype_id, r) for r in rows]
 

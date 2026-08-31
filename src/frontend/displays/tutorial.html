@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block title %}Tutorial — locusview{% endblock %}
+{% block head %}
+<style>
+  .tutorial-page { max-width: 1180px; margin: 0 auto; padding: 48px 28px 24px; }
+  .tutorial-page h1 { font-size: 30px; letter-spacing: -0.7px; margin: 0 0 10px; }
+  .tutorial-intro { max-width: 780px; color: var(--muted); line-height: 1.7; margin-bottom: 32px; }
+  .tutorial-steps {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 40px;
+  }
+  .tutorial-step { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--surface); }
+  .tutorial-step strong { display: block; color: var(--ink); margin-bottom: 5px; }
+  .tutorial-step span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .tutorial-section { margin-top: 38px; }
+  .tutorial-section h2 { font-size: 20px; margin: 0 0 6px; }
+  .tutorial-section > p { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .tutorial-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .tutorial-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tutorial-table th {
+    position: sticky; top: 0; z-index: 1; padding: 11px 14px; text-align: left;
+    background: var(--bg); color: var(--accent); border-bottom: 1px solid var(--line);
+    font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap;
+  }
+  .tutorial-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+  .tutorial-table tbody tr:last-child td { border-bottom: 0; }
+  .tutorial-table tbody tr:hover { background: #f8fafc; }
+  @media (max-width: 760px) { .tutorial-steps { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+<main class="tutorial-page">
+  <h1>Tutorial</h1>
+  <p class="tutorial-intro">
+    Use Data Browser to select one or more QTL or GWAS datasets, choose a gene, genomic region,
+    or variant, and run the query. The tables below list the concrete datasets currently available.
+  </p>
+
+  <div class="tutorial-steps">
+    <div class="tutorial-step"><strong>1. Select datasets</strong><span>Choose QTL contexts, GWAS traits, or both from the cascading selectors.</span></div>
+    <div class="tutorial-step"><strong>2. Enter a locus</strong><span>Search by gene symbol or Ensembl ID, genomic interval, rsID, or chromosome position.</span></div>
+    <div class="tutorial-step"><strong>3. Explore results</strong><span>Compare LocusZoom plots, inspect LD, and click SNPs for cross-dataset p-values.</span></div>
+  </div>
+
+  <section class="tutorial-section">
+    <h2>GWAS datasets</h2>
+    <p>{{ gwas_rows|length }} dataset{{ '' if gwas_rows|length == 1 else 's' }} currently available.</p>
+    {% if gwas_rows %}
+    <div class="tutorial-table-wrap">
+      <table class="tutorial-table" id="tutorial-gwas-table">
+        <thead><tr><th>Datasource</th><th>Accession ID</th><th>Trait ID</th><th>Population</th></tr></thead>
+        <tbody>{% for row in gwas_rows %}<tr>
+          <td>{{ row.datasource }}</td><td class="mono">{{ row.accession_id }}</td>
+          <td>{{ row.trait_id }}</td><td class="mono">{{ row.population }}</td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p>No GWAS datasets configured.</p>{% endif %}
+  </section>
+
+  <section class="tutorial-section">
+    <h2>QTL datasets</h2>
+    <p>{{ qtl_rows|length }} QTL list{{ '' if qtl_rows|length == 1 else 's' }} currently available.</p>
+    {% if qtl_rows %}
+    <div class="tutorial-table-wrap">
+      <table class="tutorial-table" id="tutorial-qtl-table">
+        <thead><tr>
+          <th>Dataset</th><th>Source project ID</th><th>QTL type</th><th>Population</th><th>Context</th>
+        </tr></thead>
+        <tbody>{% for row in qtl_rows %}<tr>
+          <td>{{ row.dataset }}</td><td class="mono">{{ row.source_project_id }}</td>
+          <td><span class="badge badge-blue">{{ row.qtl_type }}</span></td>
+          <td class="mono">{{ row.population }}</td><td>{{ row.context }}</td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p>No QTL datasets configured.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

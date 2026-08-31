@@ -13,6 +13,7 @@
   const plotArea = $("db-plot-area");
   const plotTitle = $("db-plot-title");
   const plotSub = $("db-plot-sub");
+  const geneLinks = $("db-gene-links");
   const tracksEl = $("db-tracks");
   const qtlTableEl = $("db-qtl-table-area");
   const qtlPanelsEl = $("db-qtl-panels");
@@ -143,6 +144,8 @@
     plotArea.hidden = false;
     plotTitle.textContent = p.label;
     plotSub.textContent = "";
+    geneLinks.hidden = true;
+    geneLinks.replaceChildren();
     tracksEl.innerHTML = "<p class='muted'>Loading&hellip;</p>";
     qtlTableEl.innerHTML = "";
     qtlPanelsEl.innerHTML = "";
@@ -152,6 +155,32 @@
       if (!resp.ok) throw new Error((await resp.json()).error || "request failed");
       const data = await resp.json();
       plotSub.textContent = `chr${data.region.chrom}:${data.region.start}-${data.region.end}`;
+      if (data.gene?.ensembl_id) {
+        // External databases use the stable ENSG id without its annotation-version suffix.
+        const ensemblId = data.gene.ensembl_id.split(".", 1)[0];
+        const ensemblUrl = `https://www.ensembl.org/id/${encodeURIComponent(ensemblId)}`;
+        const titleLink = document.createElement("a");
+        titleLink.href = ensemblUrl;
+        titleLink.target = "_blank";
+        titleLink.rel = "noopener noreferrer";
+        titleLink.textContent = data.gene.symbol;
+        titleLink.title = `View ${ensemblId} in Ensembl`;
+        plotTitle.replaceChildren(titleLink);
+
+        const links = [
+          ["Ensembl", ensemblUrl],
+          ["Open Targets", `https://platform.opentargets.org/target/${encodeURIComponent(ensemblId)}`],
+        ];
+        links.forEach(([label, href]) => {
+          const link = document.createElement("a");
+          link.href = href;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = `${label} ↗`;
+          geneLinks.appendChild(link);
+        });
+        geneLinks.hidden = false;
+      }
       lastData = data;
       lastDatasets = datasets;
       if (qtlLdPopulationEl) qtlLdPopulationEl.textContent = populationSel.value;

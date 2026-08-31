@@ -27,7 +27,7 @@
   </div>
   <div class="body-map-panel">
     <div class="body-map-panel-title" id="body-map-panel-title">Click a labeled tissue</div>
-    <div class="table-wrap">
+    <div class="table-wrap body-map-panel-results" id="body-map-panel-results">
       <table class="dataset-table" id="body-map-panel-table" hidden>
         <thead>
           <tr><th>Dataset</th><th>Context</th></tr>
@@ -42,4 +42,4 @@
   window.BODY_MAP_REGIONS = {{ body_map_regions | tojson }};
   window.BODY_MAP_LABELS = {{ body_map_region_labels | tojson }};
 </script>
-<script src="/static/js/body-map.js"></script>
+<script src="{{ asset('js/body-map.js') }}"></script>

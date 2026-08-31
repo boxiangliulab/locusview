@@ -243,51 +243,63 @@ def _qtl_track(
     end: int,
 ) -> dict[str, object] | None:
     """One QTL panel for the multi-track plot — see ``multi_track``'s docstring for the full
-    per-locus-tab request/display spec this implements. Gene-anchored (this gene's own cis set —
-    eQTL/pQTL/sQTL match on ``gene_id`` directly, caQTL matches the gene's start falling inside a
-    peak range, both via ``cis_associations``, see its docstring — filtered to ``[start, end]``,
-    the caller's gene-start +/-1 MB window; ``cis_associations`` itself isn't window-bounded) when
-    a gene is known, else window-anchored to exactly ``[start, end]`` (region mode: the typed
-    region verbatim; variant mode: the resolved position +/-1 MB — both via
-    ``associations_in_region``, matching whatever phenotypes overlap that window)."""
+    per-locus-tab request/display spec this implements. The initial request returns phenotype IDs
+    only: gene mode uses ``phenotypes_for_gene`` (gene_id for eQTL/sQTL, or GENCODE gene start
+    inside a caQTL peak); region/variant mode uses ``phenotype_summaries_in_region``. Association
+    values are loaded later by ``/api/locus/qtl-phenotype`` after the user checks a row."""
     dataset = next((d for d in repo.datasets() if d.id == dataset_id), None)
     if dataset is None:
         return None
+    # Values are fetched per selected phenotype, on demand — see this function's docstring.
+    assocs: list[EqtlAssociation] = []
+    summaries = None
     if gene is not None:
-        assocs = [
-            a for a in repo.cis_associations(gene.gene_id, dataset_id) if start <= a.position <= end
-        ]
+        summaries = repo.phenotypes_for_gene(gene, dataset_id)
     else:
-        assocs = repo.associations_in_region(chrom, start, end, dataset_id)
+        summaries = repo.phenotype_summaries_in_region(
+            chrom, start, end, dataset_id, _MAX_PHENOTYPE_ROWS
+        )
     lead = _min_p(assocs)
-    # Dataset.source = "{dataset}-{qtltype}-{population}" — same split convention already used by
-    # routers/browser.py and routers/home.py.
-    parts = dataset.source.split("-")
-    # Gene mode's assocs come from cis_associations (gene-bounded, rs_id-enriched — see its
-    # docstring) so sending every variant up front is cheap and lets renderQtlPanels() plot a
-    # checked phenotype with ZERO extra fetches. Region/variant mode's assocs come from
-    # associations_in_region instead, which is NEVER enriched (a window can span 100+ phenotypes,
-    # too many to enrich wholesale — see associations_for_phenotype's docstring) and can be
-    # enormous (confirmed live: a 1 Mb region here is 300k+ rows, tens of MB serialized) — the
-    # frontend always re-fetches a checked phenotype's own enriched variants from
-    # /api/locus/qtl-phenotype anyway in that case (see renderQtlPanels), so there's no point
-    # paying for this payload; only the (already small, capped-at-50) "phenotypes" summary below
-    # is used to build the results table.
+    if lead is None and summaries:
+        best = summaries[0]
+        lead_payload = (
+            None
+            if best.lead_position is None
+            else {"position": best.lead_position, "log_pvalue": neg_log10_p(best.lead_pvalue)}
+        )
+    else:
+        lead_payload = (
+            None
+            if lead is None
+            else {"position": lead.position, "log_pvalue": neg_log10_p(lead.pvalue)}
+        )
+    dataset_name, qtl_type, population = dataset.catalog_parts
+    # Every locus mode deliberately leaves variants empty. The browser requests one selected
+    # phenotype's bounded, enriched values from /api/locus/qtl-phenotype on demand.
     variants = _track_variants(assocs, lead) if gene is not None else []
     return {
         "key": f"qtl:{dataset_id}",
         "kind": "qtl",
         "dataset_id": dataset_id,
         "label": f"{dataset.source} — {dataset.tissue}",
-        "dataset": parts[0] if parts else dataset.source,
-        "qtl_type": parts[1] if len(parts) == 3 else "QTL",
-        "population": parts[2] if len(parts) == 3 else "",
+        "dataset": dataset_name,
+        "qtl_type": qtl_type,
+        "population": population,
         "context": dataset.tissue,
-        "lead": None
-        if lead is None
-        else {"position": lead.position, "log_pvalue": neg_log10_p(lead.pvalue)},
+        "lead": lead_payload,
         "variants": variants,
-        "phenotypes": _group_by_phenotype(assocs),
+        "phenotypes": _group_by_phenotype(assocs)
+        if summaries is None
+        else [
+            {
+                "phenotype_id": s.phenotype_id,
+                "gene_id": s.gene_id,
+                "lead_position": s.lead_position,
+                "lead_pvalue": s.lead_pvalue,
+                "n": s.n,
+            }
+            for s in summaries
+        ],
     }
 
 
@@ -465,7 +477,7 @@ def router(repo: QtlRepository) -> APIRouter:
         below is for QTL tracks (``_qtl_track``) specifically, per ``locus_mode``:
 
         - **``gene``**: which phenotypes get matched depends on the dataset's *kind*, decided by
-          :meth:`QtlRepository`'s ``cis_associations`` (see its docstring for the DB-level detail):
+          :meth:`QtlRepository`'s ``phenotypes_for_gene``:
           eQTL/pQTL/sQTL-style datasets (phenotype table's ``gene_id`` column populated) match the
           phenotype list **tested against this gene's ``gene_id``** directly. caQTL-style datasets
           (``gene_id`` is ``NULL`` on every row — chromatin peaks aren't genes) instead match the
@@ -474,13 +486,13 @@ def router(repo: QtlRepository) -> APIRouter:
           fixed window regardless of which branch matched, gene coordinates themselves aren't used
           beyond finding *which* phenotypes qualify.
         - **``region``**: matches every phenotype that **overlaps the given region**
-          (``associations_in_region``, chrom/position-bounded, no gene concept) — a region can
-          legitimately overlap 100+ phenotypes at once (see ``_group_by_phenotype``). The frontend
+          (``phenotype_summaries_in_region``, chrom/position-bounded, no gene concept) — a region
+          can legitimately overlap 100+ phenotypes at once. The frontend
           shows **exactly the region the user typed**, unexpanded (``window_start``/``window_end``
           are the caller's own ``start``/``end``, verbatim).
         - **``variant``**: resolves the variant to a position first (``resolve_variant`` for a bare
           rsID, or the given ``chrom``/``position`` directly), then matches the phenotype list at
-          that exact position the same way region mode does (still ``associations_in_region``,
+          that exact position the same way region mode does (still phenotype-only initially,
           just position-bounded to one point before windowing). The frontend shows **variant
           position +/-1 MB** (``_VARIANT_WINDOW`` — shared with the older single-track
           ``/api/locus/regional`` endpoint's variant mode, same size).
@@ -575,6 +587,14 @@ def router(repo: QtlRepository) -> APIRouter:
         return JSONResponse(
             {
                 "label": label,
+                "gene": (
+                    {
+                        "symbol": resolved_gene.symbol,
+                        "ensembl_id": resolved_gene.ensembl_id,
+                    }
+                    if resolved_gene is not None
+                    else None
+                ),
                 "region": {"chrom": window_chrom, "start": window_start, "end": window_end},
                 "tracks": tracks,
             }
@@ -586,22 +606,17 @@ def router(repo: QtlRepository) -> APIRouter:
     ) -> Response:
         """Enriched (rs_id-carrying) variants for ONE QTL phenotype, clipped to ``[start, end]``.
 
-        Backs the Data Browser's region/variant-mode locus tabs: their multi-track QTL panels come
-        from ``associations_in_region`` (see ``_qtl_track``), which never carries rs_id — a window
-        can span 100+ phenotypes at once, too many to enrich wholesale (confirmed: 300k+ rows
-        before any join for just a 1 Mb region — see ``associations_for_phenotype``'s docstring).
-        Once the user checks ONE phenotype row to actually plot, though, that phenotype alone is
-        cheap to fetch fresh and enriched — this endpoint does exactly that, giving region/variant
-        -mode panels the same LD-coloring gene-mode panels already get for free from
-        ``cis_associations`` (see ``static/js/multi-track-plot.js``'s ``renderQtlPanels``, which
-        calls this only when the client-filtered variants it already has carry no rs_id at all)."""
+        All gene/region/variant initial requests return phenotype IDs only. Once the user checks
+        one row, this endpoint fetches that phenotype's association values, already bounded to the
+        displayed window in SQL, and enriches them for LD coloring."""
         if chrom not in CHROMS:
             return JSONResponse({"error": f"unknown chromosome: {chrom}"}, status_code=400)
-        assocs = [
-            a
-            for a in repo.associations_for_phenotype(dataset_id, phenotype_id)
-            if start <= a.position <= end
-        ]
+        try:
+            assocs = repo.associations_for_phenotype(
+                dataset_id, phenotype_id, chrom, start, end
+            )
+        except RepositoryTimeoutError:
+            return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
         lead = _min_p(assocs)
         return JSONResponse({"variants": _track_variants(assocs, lead)})
 

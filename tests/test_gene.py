@@ -32,6 +32,8 @@ def test_gene_page_has_regional_plot_ui() -> None:
     assert 'id="lv-population"' in html  # LD population selector
     assert "cdn.plot.ly" in html  # Plotly loaded
     assert "/api/gene/" in html  # JS wires the regional endpoint
+    # Per-plot "download as SVG" button (static/js/plot-download.js) loads before the plot script.
+    assert "/static/js/plot-download.js" in html
 
 
 def test_gene_page_unknown_gene_is_404() -> None:

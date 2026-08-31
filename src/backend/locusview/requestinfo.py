@@ -53,6 +53,22 @@ class Dataset:
     # connectpostgres.py's datasets(); see there for why.
     tissue: str
     source: str  # the catalog `type` column, e.g. "gtex-v8"
+    source_project_id: str | None = None  # qtl_lists.source_project_id, e.g. "INTERVAL"
+
+    @property
+    def catalog_parts(self) -> tuple[str, str, str]:
+        """``(dataset, qtl_type, population)`` parsed from ``source``.
+
+        Dataset names may themselves contain hyphens (notably ``eQTL-Catalogue``), so the two
+        metadata suffixes must be split from the right. Legacy source strings without both
+        suffixes retain their whole value as the dataset name.
+        """
+        parts = self.source.rsplit("-", 2)
+        if len(parts) == 2:  # legacy source form such as "gtex-v8"
+            return parts[0], "QTL", ""
+        if len(parts) != 3:
+            return self.source, "QTL", ""
+        return parts[0], parts[1], parts[2]
 
 
 @dataclass(frozen=True)
@@ -96,6 +112,17 @@ class EqtlAssociation:
     # phenotype (see ``routers/locus.py``'s ``_group_by_phenotype``), since one genomic window can
     # legitimately contain variants tested against several different phenotypes at once.
     phenotype_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PhenotypeSummary:
+    """Small, database-aggregated summary used to list phenotypes in a region."""
+
+    phenotype_id: str | None
+    gene_id: int | None
+    lead_position: int | None
+    lead_pvalue: float | None
+    n: int
 
 
 @dataclass(frozen=True)
@@ -180,8 +207,26 @@ class QtlRepository(Protocol):
         locus set (not anchored to a gene)."""
         ...
 
+    def phenotype_summaries_in_region(
+        self, chrom: str, start: int, end: int, dataset_id: int, limit: int = 50
+    ) -> list[PhenotypeSummary]:
+        """Return the phenotypes whose OWN feature overlaps ``[start, end]``.
+
+        "Overlaps" is about the phenotype's own coordinates — a caQTL peak, or a gene — NOT about
+        where its tested variants fall: a cis window reaches ~1 Mb past the feature, so matching on
+        variant positions returns peaks/genes that sit well outside the region the user typed.
+
+        Implementations should aggregate before transferring rows; this is the initial
+        region/variant-mode request and must not materialize the full association window.
+        """
+        ...
+
+    def phenotypes_for_gene(self, gene: Gene, dataset_id: int) -> list[PhenotypeSummary]:
+        """Return every phenotype matched to a gene, without loading association values."""
+        ...
+
     def associations_for_phenotype(
-        self, dataset_id: int, phenotype_id: str
+        self, dataset_id: int, phenotype_id: str, chrom: str, start: int, end: int
     ) -> list[EqtlAssociation]:
         """ALL variants tested for ONE phenotype in one dataset, enriched with rs_id/ref/alt where
         available — the region/variant-mode equivalent of :meth:`cis_associations`'s per-gene
@@ -231,6 +276,21 @@ Row = Sequence[Any]
 ConnectionFactory = Callable[[], Any]
 
 _ENSG = re.compile(r"^ENSG0*(\d+)$", re.IGNORECASE)
+
+def _parse_peak_id(phenotype_id: str | None) -> tuple[str, int, int] | None:
+    """Parse a caQTL peak id (``"chr1_628997_629498"``) into ``(chrom, start, end)``.
+
+    Returns ``None`` for anything else — a gene id, an sQTL splice-cluster id, or a malformed
+    peak — so callers can fall back to placing the phenotype by its gene. ``chrom`` comes back
+    bare (``"1"``), matching :class:`Gene`'s form.
+    """
+    if not phenotype_id:
+        return None
+    match = re.fullmatch(r"(chr)?([0-9]{1,2}|MT|[XYM])_([0-9]+)_([0-9]+)", phenotype_id)
+    if match is None:
+        return None
+    return match.group(2), int(match.group(3)), int(match.group(4))
+
 
 CHROMS = frozenset([*(str(i) for i in range(1, 23)), "X"])
 POPULATIONS = frozenset({"AFR", "AMR", "EAS", "EUR", "SAS"})  # LD populations — see note above
@@ -412,14 +472,74 @@ class FakeQtlRepository:
             if a.dataset_id == dataset_id and str(a.chrom) == chrom and start <= a.position <= end
         ]
 
+    def _phenotype_overlaps(
+        self, hit: EqtlAssociation, chrom: str, start: int, end: int
+    ) -> bool:
+        """Whether this association's PHENOTYPE (not its variant) overlaps ``[start, end]``.
+
+        A ``chr_start_end`` phenotype id carries the caQTL peak's own coordinates; otherwise the
+        phenotype is a gene, whose coordinates come from this fake's ``genes``. With neither
+        available there's nothing to place the phenotype by, so it can't match.
+        """
+        peak = _parse_peak_id(hit.phenotype_id)
+        if peak is not None:
+            peak_chrom, peak_start, peak_end = peak
+            return peak_chrom == chrom and peak_start <= end and peak_end >= start
+        gene = next((g for g in self._genes if g.gene_id == hit.gene_id), None)
+        if gene is None:
+            return False
+        return gene.chrom == chrom and gene.start <= end and gene.end >= start
+
+    def phenotype_summaries_in_region(
+        self, chrom: str, start: int, end: int, dataset_id: int, limit: int = 50
+    ) -> list[PhenotypeSummary]:
+        """See :meth:`QtlRepository.phenotype_summaries_in_region`."""
+        groups: dict[str | None, list[EqtlAssociation]] = {}
+        for hit in self._associations:
+            if hit.dataset_id != dataset_id:
+                continue
+            if not self._phenotype_overlaps(hit, chrom, start, end):
+                continue
+            groups.setdefault(hit.phenotype_id, []).append(hit)
+        summaries = []
+        for phenotype_id, group in groups.items():
+            ranked = sorted(group, key=lambda a: (a.pvalue is None, a.pvalue or 0.0))
+            lead = ranked[0]
+            summaries.append(
+                PhenotypeSummary(
+                    phenotype_id, lead.gene_id, lead.position, lead.pvalue, len(group)
+                )
+            )
+        summaries.sort(key=lambda s: (s.lead_pvalue is None, s.lead_pvalue or 0.0))
+        return summaries[:limit]
+
+    def phenotypes_for_gene(self, gene: Gene, dataset_id: int) -> list[PhenotypeSummary]:
+        """See :meth:`QtlRepository.phenotypes_for_gene`."""
+        groups: dict[str | None, int | None] = {}
+        for hit in self._associations:
+            matched = hit.dataset_id == dataset_id and hit.gene_id == gene.gene_id
+            if not matched and hit.dataset_id == dataset_id:
+                peak = _parse_peak_id(hit.phenotype_id)
+                # Gene mode's peak rule: the peak CONTAINS the gene's start (see
+                # PostgresQtlRepository.cis_associations), not merely overlaps its span.
+                matched = peak is not None and (
+                    peak[0] == gene.chrom and peak[1] <= gene.start <= peak[2]
+                )
+            if matched:
+                groups[hit.phenotype_id] = hit.gene_id
+        return [PhenotypeSummary(pid, gid, None, None, 0) for pid, gid in groups.items()]
+
     def associations_for_phenotype(
-        self, dataset_id: int, phenotype_id: str
+        self, dataset_id: int, phenotype_id: str, chrom: str, start: int, end: int
     ) -> list[EqtlAssociation]:
         """See :meth:`QtlRepository.associations_for_phenotype`."""
         return [
             a
             for a in self._associations
-            if a.dataset_id == dataset_id and a.phenotype_id == phenotype_id
+            if a.dataset_id == dataset_id
+            and a.phenotype_id == phenotype_id
+            and str(a.chrom) == chrom
+            and start <= a.position <= end
         ]
 
     def associations_for_rsid(

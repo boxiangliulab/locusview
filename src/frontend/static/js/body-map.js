@@ -17,6 +17,7 @@
   const rightCol = document.getElementById("body-map-labels-right");
   const tooltip = document.getElementById("body-map-tooltip");
   const panelTitle = document.getElementById("body-map-panel-title");
+  const panelResults = document.getElementById("body-map-panel-results");
   const panelTable = document.getElementById("body-map-panel-table");
   const panelTbody = document.getElementById("body-map-panel-tbody");
   const panelEmpty = document.getElementById("body-map-panel-empty");
@@ -36,6 +37,42 @@
   // alias between the two files), and REGION_KEYWORDS targets the latter — normalize so the
   // rendered figure tags it as the region content/body_map.py expects either way.
   const ORGAN_ALIASES = { bladder: "urinary_bladder" };
+  const seenRegionNames = new Set();
+
+  // Some EBI regions (including blood and artery) are <use> instances of another region. The
+  // referenced element has its own fill:none/body-region classes, which override the instance's
+  // inherited fill and also make two instances impossible to layer independently. Expand such a
+  // <use> into a private copy of its referenced geometry before assigning our region classes.
+  function materializeUse(use, title) {
+    if (use.localName !== "use") return use;
+    const href = use.getAttribute("href") || use.getAttribute("xlink:href");
+    if (!href?.startsWith("#")) return use;
+    const source = use.ownerSVGElement?.querySelector(href);
+    // The anatomogram contains self-referential duplicates, notably hippocampus: its <g> holds
+    // a <use> that points back to that same <g>. Expanding it would clone the region into itself
+    // and corrupt getBoundingClientRect(), sending the leader line outside the body.
+    if (!source || source.contains(use)) return use;
+
+    const wrapper = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const x = Number(use.getAttribute("x") || 0);
+    const y = Number(use.getAttribute("y") || 0);
+    const transform = use.getAttribute("transform") || "";
+    if (x || y || transform) {
+      wrapper.setAttribute("transform", `translate(${x} ${y}) ${transform}`.trim());
+    }
+    wrapper.appendChild(title.cloneNode(true));
+
+    const geometry = source.cloneNode(true);
+    geometry.querySelectorAll("title").forEach((sourceTitle) => sourceTitle.remove());
+    geometry.removeAttribute("style");
+    geometry.classList.remove("body-region", "available", "unavailable", "active", "hover");
+    // Cloned ids would collide with the source SVG and are not needed by the private geometry.
+    geometry.removeAttribute("id");
+    geometry.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+    wrapper.appendChild(geometry);
+    use.replaceWith(wrapper);
+    return wrapper;
+  }
 
   roots.forEach((svg) => {
     svg.querySelectorAll("title").forEach((title) => {
@@ -46,8 +83,13 @@
       // normalize the text, don't trust the id.
       let name = title.textContent.trim().toLowerCase().replace(/\s+/g, "_");
       name = ORGAN_ALIASES[name] || name;
-      const el = title.parentElement;
+      // Several regions have a second <title> inside a nested <use>. The first title belongs to
+      // the real geometry and is the only target/label we want.
+      if (seenRegionNames.has(name)) return;
+      seenRegionNames.add(name);
+      let el = title.parentElement;
       if (!el || !name) return;
+      el = materializeUse(el, title);
       el.dataset.region = name;
       el.removeAttribute("style"); // was fill:none;stroke:none — let our own CSS take over
       el.classList.add("body-region");
@@ -62,17 +104,33 @@
   // ── side table: click a label or organ -> that region's datasets ───────────────────────────
   // Highlight the chosen region's label/organ and render its datasets into the side table.
   function selectRegion(name) {
+    // SVG uses document order as its paint order. Move the selected organ to the end of the root
+    // SVG—not merely the end of its current layer—so it also clears later sibling layers such as
+    // LAYER_OUTLINE (which otherwise hides the full-body skin shape). Repeated choices are safe:
+    // appendChild moves the existing node; it does not clone it. Every tagged EBI region carries
+    // its own transform, while their common LAYER_EFO parent has none, so reparenting preserves
+    // the region's geometry.
+    const selectedRegion = targetByRegion[name];
+    if (selectedRegion?.ownerSVGElement) {
+      selectedRegion.ownerSVGElement.appendChild(selectedRegion);
+    }
+
     document.querySelectorAll(".body-map-label.active, .body-region.active").forEach((el) => {
       el.classList.remove("active");
     });
     document.querySelector(`.body-map-label[data-region="${CSS.escape(name)}"]`)?.classList.add(
       "active"
     );
-    targetByRegion[name]?.classList.add("active");
+    selectedRegion?.classList.add("active");
+    // Reparenting can change a target's client rect; update every connector after the browser has
+    // applied the SVG DOM move so the selected line still ends at the organ's current center.
+    window.requestAnimationFrame(drawLines);
 
     panelTitle.textContent = labelFor(name);
     const entries = regions[name] || [];
     if (!entries.length) {
+      panelResults?.classList.remove("scrollable");
+      if (panelResults) panelResults.style.maxHeight = "";
       panelTable.hidden = true;
       panelEmpty.hidden = false;
       return;
@@ -91,6 +149,23 @@
       })
       .join("");
     panelTable.hidden = false;
+    const shouldScroll = entries.length > 20;
+    panelResults?.classList.toggle("scrollable", shouldScroll);
+    if (panelResults) {
+      panelResults.scrollTop = 0;
+      panelResults.style.maxHeight = "";
+      if (shouldScroll) {
+        // Measure instead of assuming a row height so font/spacing changes still show exactly 20
+        // complete dataset rows before vertical scrolling begins.
+        const headerHeight = panelTable.tHead?.getBoundingClientRect().height || 0;
+        const visibleRows = Array.from(panelTbody.rows).slice(0, 20);
+        const rowsHeight = visibleRows.reduce(
+          (total, row) => total + row.getBoundingClientRect().height,
+          0
+        );
+        panelResults.style.maxHeight = `${Math.ceil(headerHeight + rowsHeight)}px`;
+      }
+    }
   }
 
   if (!regionNames.length) return; // nothing with data to label — leave the diagram inert

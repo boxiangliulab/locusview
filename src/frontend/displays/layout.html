@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}locusview{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="{{ asset('css/base.css') }}" />
   <!-- HTMX: lets us add interactivity without a JS build chain (ADR-0002). -->
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
   {% block head %}{% endblock %}
@@ -25,6 +25,7 @@
     <nav class="site-nav">
       <a href="/" class="{{ 'active' if active == 'home' else '' }}">Home</a>
       <a href="/browser" class="{{ 'active' if active == 'browser' else '' }}">Data Browser</a>
+      <a href="/tutorial" class="{{ 'active' if active == 'tutorial' else '' }}">Tutorial</a>
       <a href="/news" class="{{ 'active' if active == 'news' else '' }}">News</a>
     </nav>
     <span class="version">v{{ version }}</span>

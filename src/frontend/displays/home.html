@@ -20,6 +20,7 @@
   .stat-card .label { font-size: 12px; color: var(--faint); margin-top: 4px; }
 
   .section { max-width: 1100px; margin: 0 auto; padding: 48px 28px 8px; }
+  .section.body-map-section { max-width: 1280px; }
   .section h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 6px; }
   .section > p.lede { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
 
@@ -45,22 +46,22 @@
     display: flex; align-items: center; justify-content: center; gap: 4px; position: relative;
   }
   .body-map-labels {
-    display: flex; flex-direction: column; justify-content: center; gap: 3px;
-    font-size: 10.5px; flex: 0 0 150px; padding-top: 20px; padding-bottom: 20px;
+    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+    font-size: 15px; flex: 0 0 195px; padding-top: 28px; padding-bottom: 28px;
   }
   .body-map-labels-left { align-items: flex-end; text-align: right; }
   .body-map-labels-right { align-items: flex-start; text-align: left; }
   .body-map-label {
-    cursor: pointer; padding: 1px 5px; border-radius: 4px; color: var(--muted); line-height: 1.3;
+    cursor: pointer; padding: 2px 7px; border-radius: 4px; color: var(--muted); line-height: 1.35;
     transition: background 0.1s, color 0.1s;
   }
   .body-map-label.hover, .body-map-label.active { background: var(--accent-soft); color: var(--accent); }
   /* One figure now (was male + female side by side) — so it gets the width both used to share. */
   .body-map-figures { display: flex; gap: 6px; flex: 0 0 auto; }
-  .body-map-figure { flex: 0 0 230px; min-width: 0; }
+  .body-map-figure { flex: 0 0 285px; min-width: 0; }
   .body-map-figure svg { width: 100%; height: auto; display: block; }
   .body-map-leaders { position: absolute; top: 0; left: 0; pointer-events: none; }
-  .body-map-leaders line { stroke: var(--faint); stroke-width: 1; }
+  .body-map-leaders line { stroke: var(--faint); stroke-width: 1.1; }
   .body-region { fill: var(--faint); cursor: pointer; transition: fill 0.15s, opacity 0.15s; }
   .body-region.available { fill: var(--accent); opacity: 0.55; }
   .body-region.available:hover, .body-region.available.hover { opacity: 0.9; fill: var(--lead); }
@@ -72,7 +73,7 @@
     padding: 6px 10px; border-radius: 6px; pointer-events: none; max-width: 220px;
   }
   .body-map-side { flex: 0 0 460px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-  .body-map-legend { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+  .body-map-legend { display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: var(--muted); }
   .body-map-legend .dot {
     display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
     vertical-align: middle;
@@ -83,7 +84,13 @@
     background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
     padding: 16px 20px;
   }
-  .body-map-panel-title { font-weight: 600; font-size: 14px; margin-bottom: 10px; }
+  .body-map-panel-title { font-weight: 600; font-size: 16px; margin-bottom: 10px; }
+  /* Keep short result sets unchanged. With more than 20 rows, JS adds .scrollable and sets the
+     exact height of the header plus the first 20 rendered rows as this viewport's maximum. */
+  .body-map-panel-results.scrollable { overflow-y: auto; overscroll-behavior: contain; }
+  .body-map-panel-results.scrollable #body-map-panel-table th {
+    position: sticky; top: 0; z-index: 1;
+  }
   .body-map-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
 
   .citation-list { display: flex; flex-direction: column; gap: 12px; }
@@ -117,15 +124,11 @@
         <div class="value">{{ n_tissues }}</div>
         <div class="label">Tissues &amp; contexts</div>
       </div>
-      <div class="stat-card">
-        <div class="value" style="color:#059669">QTL + GWAS</div>
-        <div class="label">Data types</div>
-      </div>
     </div>
   </div>
 </div>
 
-<div class="section">
+<div class="section body-map-section">
   <h2>Browse by tissue</h2>
   <p class="lede">Hover the body map for tissues with integrated data; click one to see its datasets.</p>
   <div class="body-map-row">

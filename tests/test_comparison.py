@@ -67,16 +67,16 @@ def test_variant_stats_by_position_compares_across_qtl_and_gwas() -> None:
     assert 'badge-orange">GWAS<' in html
 
 
-def test_variant_stats_marks_significant_rows() -> None:
+def test_variant_stats_only_shows_requested_columns() -> None:
     html = _client().get(
         "/browser/partials/variant-stats",
         params={"chrom": "17", "position": 7_670_000, "datasets": "qtl:1,qtl:2"},
     ).text
-    # Whole_Blood (p=1e-9) is below the 5e-8 genome-wide bar; Liver (p=0.02) is not.
-    blood_row = html[html.index("Whole_Blood") : html.index("Whole_Blood") + 300]
-    liver_row = html[html.index("Liver") : html.index("Liver") + 300]
-    assert "✓" in blood_row
-    assert "✓" not in liver_row
+    assert "<th>Dataset</th>" in html
+    assert "<th>Type</th>" in html
+    assert "p-value" in html
+    assert "log" not in html
+    assert "Sig." not in html
 
 
 def test_variant_stats_only_selected_datasets_are_compared() -> None:
