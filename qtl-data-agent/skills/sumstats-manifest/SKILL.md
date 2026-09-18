@@ -1,11 +1,18 @@
 ---
 name: sumstats-manifest
-description: Inspect already-downloaded GWAS or QTL summary-statistics files, confirm their column layout from the header and first rows, and record them in gwas_manifest.tsv / qtl_manifest.tsv with the correct column mapping. Use when asked to register downloaded sumstats, build or update a manifest, work out which column is beta/pval/chrom in a file, or check that an existing manifest still matches the files on disk.
+description: Read the first lines of every downloaded QTL summary-statistics file, work out its delimiter and which column is chrom/position/ref/alt/beta/pval, and fill that layout back into the qtlliteraturereview table; then register the files in qtl_manifest.tsv / gwas_manifest.tsv with their provenance and validate them. Use after download-qtl, to build or update a manifest, to work out which column is beta/pval/chrom in a file, or to check that an existing manifest still matches the files on disk.
 ---
 
-# Summary-statistics manifest
+# Summary-statistics manifest — stage 4 of 4
 
-Turns a downloaded file into a manifest row from two inputs that each know half the answer:
+Two jobs, in order:
+
+1. **`fill-table`** — read the head of every file `download-qtl` fetched and record its layout in
+   the review table, so the table says what each file actually contains.
+2. **`add-qtl` / `add-gwas` / `validate`** — promote those files into `qtl_manifest.tsv` /
+   `gwas_manifest.tsv` with the provenance a data file cannot state about itself.
+
+Both rest on the same idea: a manifest row comes from two inputs that each know half the answer:
 
 - **the file** supplies the *layout* — delimiter and which column is chrom, beta, pval…
 - **the shared metadata store** supplies the *provenance* — accession, trait, population, sample
@@ -13,7 +20,7 @@ Turns a downloaded file into a manifest row from two inputs that each know half 
   `qtl-data-finder` skills fetched from the source.
 
 ```bash
-M=src/skills/sumstats-manifest/scripts/manifest.py
+M=qtl-data-agent/skills/sumstats-manifest/scripts/manifest.py
 STORE=sumstats_metadata.jsonl
 
 # upstream, once per dataset — writes the store
@@ -21,6 +28,10 @@ python3 …/find_gwas.py "basophil count"      --save-metadata $STORE
 python3 …/find_qtl.py  resolve QTD000574     --save-metadata $STORE
 
 python3 $M inspect data/GTEx_v10/Whole_Blood.v10.eqtl.tsv.gz     # look first, always
+
+# stage 4: fill the review table's layout columns from the files on disk
+python3 $M fill-table qtlliteraturereview-2026-09-01.dedup.tsv --rows 5
+
 python3 $M add-gwas data/GCST90002296.tsv.gz \
     --accession GCST90002296 --metadata $STORE
 python3 $M add-qtl  data/QTD000574.all.tsv.gz \
@@ -30,6 +41,35 @@ python3 $M validate qtl --manifest qtl_manifest.tsv               # after any ed
 
 Standard library only. Handles `.gz` and plain text, sniffs the delimiter, and accepts a glob for
 sharded datasets.
+
+## `fill-table` — what the downloaded files actually contain
+
+```bash
+python3 $M fill-table qtlliteraturereview-2026-09-01.dedup.tsv
+```
+
+For every row `download-qtl` marked `downloaded`, this reads the header and first few data rows of
+`local_path`, sniffs the delimiter, maps the columns, and writes back:
+
+```
+delimiter  n_columns  chrom_col  position_col  ref_col  alt_col  beta_col  se_col
+pval_col  rsid_col  maf_col  phenotype_id_col  layout_status  missing_columns
+```
+
+`layout_status` is the answer the pipeline needs:
+
+| Value | Meaning | What to do |
+|---|---|---|
+| `complete` | chrom, position, ref, alt, beta and pval all mapped | register it with `add-qtl` |
+| `missing-columns` | at least one required slot is absent; `missing_columns` names them | find the right file, or record why it is unusable |
+| `unreadable` | the path is gone, empty or not a table; the error is in `missing_columns` | re-download, or fix the path |
+
+Rows already filled are left alone unless you pass `--force`, so a resumed run is cheap. Rows that
+were never downloaded are skipped, not guessed at.
+
+`missing-columns` is a real finding, not a formatting problem to work around. A file with no `beta`
+column cannot be used for colocalisation whatever the manifest says about it, and `--force` on
+`add-qtl` only moves the failure to load time.
 
 ## Where the metadata comes from
 

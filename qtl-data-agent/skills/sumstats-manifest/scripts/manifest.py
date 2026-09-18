@@ -2,9 +2,15 @@
 """Inspect downloaded GWAS/QTL summary statistics and record them in a manifest.
 
   inspect     peek at a file, propose a column mapping, show sample rows
+  fill-table  read the first lines of every downloaded file and fill the review table
   add-gwas    append or update a row in gwas_manifest.tsv
   add-qtl     append or update a row in qtl_manifest.tsv
   validate    re-check every row of a manifest against the files on disk
+
+Stage 4 of the QTL pipeline is `fill-table`: it reads the head of each file that
+download_qtl fetched and writes the layout back into the review table, so the table
+says what each file actually contains. `add-qtl` then promotes those rows into
+qtl_manifest.tsv with their provenance.
 
 Column mapping is inferred from the header; everything a file cannot tell you
 about itself (accession, trait, population, sample size, URL) must be passed in.
@@ -459,6 +465,92 @@ def cmd_add_qtl(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── filling the review table ─────────────────────────────────────────────────
+#
+# Stage 4. download_qtl leaves local_path and download_status=downloaded on every
+# row it fetched; this reads the head of each of those files and records the layout
+# next to the dataset it belongs to. Columns this stage owns:
+
+LAYOUT_COLUMNS = (
+    "delimiter", "n_columns", "chrom_col", "position_col", "ref_col", "alt_col",
+    "beta_col", "se_col", "pval_col", "rsid_col", "maf_col", "phenotype_id_col",
+    "layout_status", "missing_columns",
+)
+TABLE_REQUIRED = ("record_id", "download_status", "local_path")
+
+
+def _table_delimiter(path: Path) -> str:
+    return "," if path.suffix.casefold() == ".csv" else "\t"
+
+
+def read_review_table(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle, delimiter=_table_delimiter(path))
+        fields = list(reader.fieldnames or [])
+        rows = [dict(row) for row in reader]
+    if not fields:
+        raise ValueError(f"table has no header: {path}")
+    missing = [c for c in TABLE_REQUIRED if c not in fields]
+    if missing:
+        raise ValueError(f"{path} has not been through download_qtl; missing: {', '.join(missing)}")
+    return fields, rows
+
+
+def write_review_table(path: Path, fields: list[str], rows: list[dict[str, str]]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, delimiter=_table_delimiter(path))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def fill_table(table: Path, *, rows_to_read: int, force: bool) -> dict[str, int]:
+    """Record delimiter, column mapping and readiness for every downloaded file."""
+    fields, rows = read_review_table(table)
+    fields = fields + [c for c in LAYOUT_COLUMNS if c not in fields]
+    for row in rows:
+        for column in LAYOUT_COLUMNS:
+            row.setdefault(column, "")
+
+    counts = {"complete": 0, "missing-columns": 0, "unreadable": 0, "skipped": 0}
+    for row in rows:
+        path_value = row.get("local_path", "").strip()
+        if row.get("download_status", "") != "downloaded" or not path_value:
+            counts["skipped"] += 1
+            continue
+        if row.get("layout_status", "") and not force:
+            counts[row["layout_status"]] = counts.get(row["layout_status"], 0) + 1
+            continue
+        try:
+            found = inspect(path_value, rows=rows_to_read)
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            row["layout_status"] = "unreadable"
+            row["missing_columns"] = f"{type(exc).__name__}: {exc}"
+            counts["unreadable"] += 1
+            continue
+        row["delimiter"] = escape_delim(found.delimiter)
+        row["n_columns"] = str(len(found.header))
+        for slot in SYNONYMS:
+            if slot in LAYOUT_COLUMNS:
+                row[slot] = found.mapping.get(slot, "")
+        row["missing_columns"] = ";".join(found.missing_required)
+        row["layout_status"] = "missing-columns" if found.missing_required else "complete"
+        counts[row["layout_status"]] += 1
+    write_review_table(table, fields, rows)
+    return counts
+
+
+def cmd_fill_table(args: argparse.Namespace) -> int:
+    counts = fill_table(args.table, rows_to_read=args.rows, force=args.force)
+    print(f"{args.table}: {counts}")
+    if counts.get("missing-columns"):
+        print(
+            "rows marked missing-columns lack one of chrom/position/ref/alt/beta/pval — "
+            "find the right file or record why it cannot be used; do not force them in",
+            file=sys.stderr,
+        )
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     columns = GWAS_COLUMNS if args.kind == "gwas" else QTL_COLUMNS
     rows = read_manifest(args.manifest, columns)
@@ -508,6 +600,14 @@ def main() -> int:
     s.add_argument("--rows", type=int, default=3)
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_inspect)
+
+    s = sub.add_parser(
+        "fill-table", help="fill a review table's layout columns from the downloaded files"
+    )
+    s.add_argument("table", type=Path, help="the review table download_qtl updated")
+    s.add_argument("--rows", type=int, default=5, help="data rows to read per file")
+    s.add_argument("--force", action="store_true", help="re-inspect rows already filled")
+    s.set_defaults(func=cmd_fill_table)
 
     s = sub.add_parser("add-gwas", help="record a GWAS file in gwas_manifest.tsv")
     s.add_argument("file")

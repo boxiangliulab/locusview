@@ -11,7 +11,7 @@ FTP download URLs for the summary statistics, and the metadata YAML that ships b
 ## Use the script
 
 ```bash
-python3 src/skills/gwas-catalog-lookup/scripts/find_gwas.py "basophil count"
+python3 qtl-data-agent/skills/gwas-catalog-lookup/scripts/find_gwas.py "basophil count"
 ```
 
 Standard library only — no `uv sync`, no added dependencies. A run takes 15–30 s (several paged
