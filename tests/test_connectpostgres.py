@@ -413,9 +413,7 @@ def test_associations_for_phenotype_unknown_id_returns_empty() -> None:
 
     factory, log = _routing_factory(responder)
     assert (
-        PostgresQtlRepository(factory).associations_for_phenotype(
-            1, "nonexistent", "17", 1, 2
-        )
+        PostgresQtlRepository(factory).associations_for_phenotype(1, "nonexistent", "17", 1, 2)
         == []
     )
     assert not any("phenotype_key = %s" in sql for sql, _ in log)
@@ -478,9 +476,7 @@ def test_tissues_with_signal() -> None:
         return [(1e-8,)]
 
     factory, _ = _routing_factory(responder)
-    assert PostgresQtlRepository(factory).tissues_with_signal(141510) == [
-        (1, "Whole_Blood", 1e-8)
-    ]
+    assert PostgresQtlRepository(factory).tissues_with_signal(141510) == [(1, "Whole_Blood", 1e-8)]
 
 
 def test_associations_in_region() -> None:
@@ -568,9 +564,7 @@ def test_phenotype_summaries_in_region_no_genes_in_window_skips_phenotype_query(
         raise AssertionError(f"unexpected query: {sql}")
 
     factory, log = _routing_factory(responder)
-    assert (
-        PostgresQtlRepository(factory).phenotype_summaries_in_region("17", 1, 2, 1, 50) == []
-    )
+    assert PostgresQtlRepository(factory).phenotype_summaries_in_region("17", 1, 2, 1, 50) == []
     assert not any("gene_id = ANY" in sql for sql, _ in log)
 
 

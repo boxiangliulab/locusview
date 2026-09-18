@@ -69,9 +69,7 @@ def test_search_redirects_a_bare_variant_to_browser_variant_mode() -> None:
 
 
 def test_search_redirects_a_region_to_browser_region_mode() -> None:
-    response = client.get(
-        "/search", params={"q": "chr17:7660000-7690000"}, follow_redirects=False
-    )
+    response = client.get("/search", params={"q": "chr17:7660000-7690000"}, follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == (
         "/browser?locus_mode=region&region=chr17%3A7660000-7690000"
@@ -82,6 +80,11 @@ def test_search_unsupported_query_is_404() -> None:
     response = client.get("/search", params={"q": "???"}, follow_redirects=False)
     assert response.status_code == 404
     assert "gene, region, or variant" in response.text.lower()
+
+
+def test_search_rejects_a_chromosome_the_browser_cannot_query() -> None:
+    response = client.get("/search", params={"q": "chrMT:1-100"}, follow_redirects=False)
+    assert response.status_code == 404
 
 
 # ── static-asset cache busting (templating.asset) ─────────────────────────────

@@ -31,16 +31,50 @@ from dataclasses import dataclass
 from pathlib import Path
 
 GWAS_COLUMNS = [
-    "accession", "trait", "datasource", "population", "type", "sample_size",
-    "file_path", "delimiter", "chrom_col", "position_col", "ref_col", "alt_col",
-    "beta_col", "se_col", "pval_col", "rsid_col", "maf_col", "variant_id_col", "url",
+    "accession",
+    "trait",
+    "datasource",
+    "population",
+    "type",
+    "sample_size",
+    "file_path",
+    "delimiter",
+    "chrom_col",
+    "position_col",
+    "ref_col",
+    "alt_col",
+    "beta_col",
+    "se_col",
+    "pval_col",
+    "rsid_col",
+    "maf_col",
+    "variant_id_col",
+    "url",
 ]
 
 QTL_COLUMNS = [
-    "dataset", "qtl_type", "biocontext", "level_1_context", "level_2_context",
-    "population", "sample_size", "file_path", "delimiter", "chrom_col", "position_col",
-    "ref_col", "alt_col", "beta_col", "se_col", "pval_col", "rsid_col", "maf_col",
-    "variant_id_col", "phenotype_id_col", "gene_id_mode", "url",
+    "dataset",
+    "qtl_type",
+    "biocontext",
+    "level_1_context",
+    "level_2_context",
+    "population",
+    "sample_size",
+    "file_path",
+    "delimiter",
+    "chrom_col",
+    "position_col",
+    "ref_col",
+    "alt_col",
+    "beta_col",
+    "se_col",
+    "pval_col",
+    "rsid_col",
+    "maf_col",
+    "variant_id_col",
+    "phenotype_id_col",
+    "gene_id_mode",
+    "url",
 ]
 
 # Rows are keyed on these so re-running updates in place instead of duplicating.
@@ -53,36 +87,81 @@ QTL_KEY = ("dataset", "qtl_type", "biocontext")
 SYNONYMS: dict[str, list[str]] = {
     "chrom_col": ["chromosome", "chrom", "chr", "#chrom", "hm_chrom", "chr_name", "chrnum"],
     "position_col": [
-        "position", "pos", "bp", "base_pair_location", "hm_pos", "chrom_start",
-        "chr_position", "genpos", "start",
+        "position",
+        "pos",
+        "bp",
+        "base_pair_location",
+        "hm_pos",
+        "chrom_start",
+        "chr_position",
+        "genpos",
+        "start",
     ],
     # ref = non-effect allele, alt = effect allele (beta is w.r.t. alt).
     "ref_col": [
-        "other_allele", "ref", "non_effect_allele", "allele0", "a2", "hm_other_allele",
-        "reference_allele", "noneffect_allele",
+        "other_allele",
+        "ref",
+        "non_effect_allele",
+        "allele0",
+        "a2",
+        "hm_other_allele",
+        "reference_allele",
+        "noneffect_allele",
     ],
     "alt_col": [
-        "effect_allele", "alt", "allele1", "a1", "hm_effect_allele", "tested_allele",
-        "coded_allele", "minor_allele",
+        "effect_allele",
+        "alt",
+        "allele1",
+        "a1",
+        "hm_effect_allele",
+        "tested_allele",
+        "coded_allele",
+        "minor_allele",
     ],
     "beta_col": ["beta", "slope", "effect_size", "effect", "b", "hm_beta", "log_odds"],
     "se_col": ["standard_error", "slope_se", "se", "stderr", "sebeta", "beta_se", "log_odds_se"],
     "pval_col": [
-        "p_value", "pval_nominal", "pvalue", "pval", "p", "p_bolt_lmm", "p.value",
-        "p_value_association", "frequentist_add_pvalue",
+        "p_value",
+        "pval_nominal",
+        "pvalue",
+        "pval",
+        "p",
+        "p_bolt_lmm",
+        "p.value",
+        "p_value_association",
+        "frequentist_add_pvalue",
     ],
     "rsid_col": [
-        "rs_id_dbsnp155_grch38p13", "rsid", "rs_id", "snp", "snpid", "rs", "variant_rsid",
-        "rs_id_dbsnp151_grch38p7", "hm_rsid",
+        "rs_id_dbsnp155_grch38p13",
+        "rsid",
+        "rs_id",
+        "snp",
+        "snpid",
+        "rs",
+        "variant_rsid",
+        "rs_id_dbsnp151_grch38p7",
+        "hm_rsid",
     ],
     "maf_col": [
-        "maf", "minor_allele_frequency", "effect_allele_frequency", "af", "freq",
-        "a1freq", "eaf", "hm_effect_allele_frequency",
+        "maf",
+        "minor_allele_frequency",
+        "effect_allele_frequency",
+        "af",
+        "freq",
+        "a1freq",
+        "eaf",
+        "hm_effect_allele_frequency",
     ],
     "variant_id_col": ["variant_id", "variant", "varid", "snp_id", "id", "hm_variant_id"],
     "phenotype_id_col": [
-        "phenotype_id", "molecular_trait_id", "gene_id", "gene", "peak_region",
-        "phenotype", "pid", "feature_id",
+        "phenotype_id",
+        "molecular_trait_id",
+        "gene_id",
+        "gene",
+        "peak_region",
+        "phenotype",
+        "pid",
+        "feature_id",
     ],
 }
 
@@ -239,8 +318,14 @@ def inspect(file_path: str, *, rows: int = 3) -> Inspection:
 
 GWAS_FROM_STORE = ["accession", "trait", "datasource", "population", "type", "sample_size", "url"]
 QTL_FROM_STORE = [
-    "dataset", "qtl_type", "biocontext", "level_1_context", "level_2_context",
-    "population", "sample_size", "url",
+    "dataset",
+    "qtl_type",
+    "biocontext",
+    "level_1_context",
+    "level_2_context",
+    "population",
+    "sample_size",
+    "url",
 ]
 
 
@@ -251,9 +336,7 @@ def load_store(path: Path) -> list[dict]:
             f"with --save-metadata first"
         )
     return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
 
@@ -317,9 +400,7 @@ def write_manifest(path: Path, columns: list[str], rows: list[dict[str, str]]) -
     tmp.replace(path)
 
 
-def upsert(
-    path: Path, columns: list[str], key: tuple[str, ...], row: dict[str, str]
-) -> str:
+def upsert(path: Path, columns: list[str], key: tuple[str, ...], row: dict[str, str]) -> str:
     rows = read_manifest(path, columns)
     ident = tuple(row.get(k, "") for k in key)
     for i, existing in enumerate(rows):
@@ -401,8 +482,11 @@ def cmd_add_gwas(args: argparse.Namespace) -> int:
         meta = from_store(record, GWAS_FROM_STORE)
     # Anything given on the command line wins over the store.
     overrides = {
-        "trait": args.trait, "datasource": args.datasource, "population": args.population,
-        "type": args.type, "url": args.url,
+        "trait": args.trait,
+        "datasource": args.datasource,
+        "population": args.population,
+        "type": args.type,
+        "url": args.url,
         "sample_size": str(args.sample_size) if args.sample_size is not None else "",
     }
     meta.update({k: v for k, v in overrides.items() if v})
@@ -436,9 +520,13 @@ def cmd_add_qtl(args: argparse.Namespace) -> int:
         record = find_record(load_store(args.metadata), "qtl", key)
         meta = from_store(record, QTL_FROM_STORE)
     overrides = {
-        "dataset": args.dataset, "qtl_type": args.qtl_type, "biocontext": args.biocontext,
-        "level_1_context": args.level_1_context, "level_2_context": args.level_2_context,
-        "population": args.population, "url": args.url,
+        "dataset": args.dataset,
+        "qtl_type": args.qtl_type,
+        "biocontext": args.biocontext,
+        "level_1_context": args.level_1_context,
+        "level_2_context": args.level_2_context,
+        "population": args.population,
+        "url": args.url,
         "sample_size": str(args.sample_size) if args.sample_size is not None else "",
     }
     meta.update({k: v for k, v in overrides.items() if v})

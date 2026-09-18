@@ -119,9 +119,10 @@ def test_qtl_catalog_endpoints_handle_hyphenated_dataset_name() -> None:
     assert client.get(
         "/api/browser/qtl/source-projects", params={"dataset": "eQTL-Catalogue"}
     ).json() == ["INTERVAL"]
-    assert client.get(
-        "/api/browser/qtl/types", params={"dataset": "eQTL-Catalogue"}
-    ).json() == ["eQTL", "sQTL"]
+    assert client.get("/api/browser/qtl/types", params={"dataset": "eQTL-Catalogue"}).json() == [
+        "eQTL",
+        "sQTL",
+    ]
     assert client.get(
         "/api/browser/qtl/contexts",
         params={"dataset": "eQTL-Catalogue", "qtl_type": "sQTL"},
@@ -151,9 +152,7 @@ def test_qtl_catalog_filters_types_and_contexts_by_source_project() -> None:
 
 
 def test_browser_preselection_includes_source_project() -> None:
-    repo = FakeQtlRepository(
-        datasets=[Dataset(5, "Blood", "eQTL-Catalogue-eQTL-EUR", "INTERVAL")]
-    )
+    repo = FakeQtlRepository(datasets=[Dataset(5, "Blood", "eQTL-Catalogue-eQTL-EUR", "INTERVAL")])
     html = TestClient(create_app(repository=repo)).get("/browser").text
     assert _preselected(html, "PRESELECTED_QTL_ROWS") == [
         {
