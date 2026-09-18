@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from locusview.requestinfo import CHROMS
+
 
 class QueryKind(StrEnum):
     """The kind of thing a search string refers to."""
@@ -43,7 +45,7 @@ class ParsedQuery:
     ensembl_id: str | None = None  # unversioned, e.g. "ENSG00000141510"
     ensembl_version: str | None = None  # the ".N" suffix digits, if given
     rsid: str | None = None  # normalised, e.g. "rs12345"
-    chrom: str | None = None  # normalised: no "chr" prefix; "MT" for mito
+    chrom: str | None = None  # normalised: no "chr" prefix; one of 1-22/X
     position: int | None = None
     ref: str | None = None
     alt: str | None = None
@@ -62,8 +64,8 @@ _GENE_SYMBOL = re.compile(r"^[A-Za-z][A-Za-z0-9._-]*$")
 
 
 def _norm_chrom(c: str) -> str:
-    c = c.upper()
-    return "MT" if c == "M" else c
+    """Uppercase a chromosome label; supported labels are checked against ``CHROMS``."""
+    return c.upper()
 
 
 def parse_query(text: str) -> ParsedQuery:
@@ -86,17 +88,19 @@ def parse_query(text: str) -> ParsedQuery:
 
     if m := _REGION.match(raw):
         start, end = int(m.group(2)), int(m.group(3))
-        if start > end:
+        chrom = _norm_chrom(m.group(1))
+        if chrom not in CHROMS or start > end:
             return ParsedQuery(QueryKind.UNKNOWN, raw)
-        return ParsedQuery(
-            QueryKind.REGION, raw, chrom=_norm_chrom(m.group(1)), start=start, end=end
-        )
+        return ParsedQuery(QueryKind.REGION, raw, chrom=chrom, start=start, end=end)
 
     if m := _VARIANT.match(raw):
+        chrom = _norm_chrom(m.group(1))
+        if chrom not in CHROMS:
+            return ParsedQuery(QueryKind.UNKNOWN, raw)
         return ParsedQuery(
             QueryKind.VARIANT,
             raw,
-            chrom=_norm_chrom(m.group(1)),
+            chrom=chrom,
             position=int(m.group(2)),
             ref=m.group(3).upper() if m.group(3) else None,
             alt=m.group(4).upper() if m.group(4) else None,

@@ -1,0 +1,22 @@
+{# Locus View regional plot with its own tissue/population controls — used by the gene page,
+   which (unlike the Data Browser) has no sidebar to host those controls in.
+   Context: datasets = [Dataset(id, tissue, source)], plot_endpoint = base URL for the JSON feed
+   (e.g. "/api/gene/TP53/regional"). #}
+<div id="lv-regional" data-endpoint-base="{{ plot_endpoint }}">
+  <div class="controls">
+    <div>
+      <label for="lv-tissue">Tissue</label>
+      <select id="lv-tissue">
+        {% for d in datasets %}<option value="{{ d.id }}">{{ d.tissue }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="lv-population">LD population</label>
+      <select id="lv-population">
+        {% for p in ["EUR", "AFR", "AMR", "EAS", "SAS"] %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  {% include "partials/_regional_plot_canvas.html" %}
+</div>
+<script>LocusPlot.init(document.getElementById("lv-regional"));</script>

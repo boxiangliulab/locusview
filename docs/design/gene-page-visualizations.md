@@ -2,11 +2,16 @@
 
 - **Status:** Accepted; **reconciled with Liu Fei's mockup (2026-07-07)**. Backend shipped (#25); frontend = #27.
 - **Diátaxis:** Design/Explanation (a spec — the *how*, with the *why*).
-- **Related:** [gene page](../../src/locusview/web.py) · [repository](../../src/locusview/repository.py) ·
+- **Related:** [gene page](../../src/backend/locusview/web.py) · [repository](../../src/backend/locusview/repository.py) ·
   [ADR-0008 (shared DB)](../adr/0008-store-qtl-in-locuscompare2-database.md) ·
   [schema-change coordination](../process/schema-change-coordination.md) · issue #18 (effect allele).
 - **Provenance:** distilled from a 4-agent web-verified research workflow; team decisions applied
   (Plotly-first; plot before body map; eQTL body map).
+- **Scope-expansion note (2026-08):** the "Deferred to their own issues (not in #27)" list below
+  (tabbed shell, Cross-Dataset, citations panel) **was subsequently built**, at explicit user
+  request and aware of this doc's original deferral — see the "Scope note" in
+  [`docs/process/status.md`](../process/status.md) for what shipped and how it departs from the
+  mockup's placeholder data.
 
 ## Goal
 Make the gene page show *where and how strong* a gene's eQTLs are:

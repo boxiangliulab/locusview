@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block title %}Data Browser — locusview{% endblock %}
+{% block content %}
+<div class="db-layout">
+  {% include "partials/_sidebar.html" %}
+
+  <div class="db-main" id="db-main">
+    <div class="db-empty" id="db-empty">
+      <p>Select a locus and click Run Query.</p>
+      <p class="muted" style="font-size:12px">Choose a tissue, gene, region, or variant.</p>
+    </div>
+
+    <div id="db-plot-area" hidden>
+      <div class="db-plot-header">
+        <div>
+          <h2 id="db-plot-title"></h2>
+          <div class="sub" id="db-plot-sub"></div>
+          <div class="db-external-links" id="db-gene-links" hidden></div>
+        </div>
+      </div>
+      <div class="db-results-row">
+        <div class="db-results-plots">
+          {% include "partials/_multi_track_plot.html" %}
+        </div>
+        <div class="db-results-side">
+          <div id="db-qtl-table-area"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="db-stats-area" hidden></div>
+    <p class="muted" id="db-error" hidden></p>
+  </div>
+</div>
+<script src="{{ asset('js/browser.js') }}"></script>
+{% endblock %}

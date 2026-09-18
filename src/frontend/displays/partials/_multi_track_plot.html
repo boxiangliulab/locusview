@@ -1,0 +1,21 @@
+{# Empty containers for the Data Browser Locus View's MIDDLE column (see browser.html for the
+   right-hand "QTL results by phenotype" table): (1) the LD legend — sits above BOTH GWAS and QTL
+   sections since either can show LD colors (hidden until at least one plotted panel, GWAS or QTL,
+   actually has LD colors — see multi-track-plot.js's gwasUsedLd/qtlUsedLd), (2) GWAS locuszoom
+   plot(s), rendered immediately, (3) locuszoom panel(s) for whichever phenotype rows the user has
+   checked in the table. See static/js/browser.js's runLocusView and static/js/multi-track-plot.js's
+   renderQtlTable/renderQtlPanels. #}
+<div class="legend" id="db-qtl-ld-legend" hidden style="margin-bottom:16px">
+  <span><span class="swatch" style="background:#f97316"></span>lead</span>
+  <span><span class="swatch" style="background:#DB3D11"></span>0.8&ndash;1.0</span>
+  <span><span class="swatch" style="background:#F8C32A"></span>0.6&ndash;0.8</span>
+  <span><span class="swatch" style="background:#6EFE68"></span>0.4&ndash;0.6</span>
+  <span><span class="swatch" style="background:#26BCE1"></span>0.2&ndash;0.4</span>
+  <span><span class="swatch" style="background:#463699"></span>&lt;&nbsp;0.2 / not in panel</span>
+  <span class="muted" style="font-size:0.78rem">LD = 1000G phase 3, <span id="db-qtl-ld-population">EUR</span> &middot; points with no rsID aren't shown</span>
+</div>
+<div id="db-tracks"></div>
+<div id="db-qtl-panels"></div>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<script src="{{ asset('js/plot-download.js') }}"></script>
+<script src="{{ asset('js/multi-track-plot.js') }}"></script>
