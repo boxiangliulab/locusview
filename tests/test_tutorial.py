@@ -51,3 +51,22 @@ def test_tutorial_empty_catalogs_have_clear_messages() -> None:
     html = TestClient(create_app(repository=FakeQtlRepository())).get("/tutorial").text
     assert "No GWAS datasets configured" in html
     assert "No QTL datasets configured" in html
+
+
+def test_tutorial_explains_requesting_data_from_the_api() -> None:
+    html = _client().get("/tutorial").text
+    assert 'id="request-from-api"' in html and "Request data from the API" in html
+    assert 'href="#request-from-api"' in html  # linked from the intro
+    for param in ('<td class="mono">q</td>', '<td class="mono">p</td>', "datasets</td>"):
+        assert param in html
+    assert "Default <code>1e-4</code>" in html
+    assert "import requests" in html and "/api/search-data" in html
+    assert 'id="tutorial-origin"' in html
+    assert "404" in html and "400" in html
+
+
+def test_tutorial_dataset_tables_have_no_api_key_column() -> None:
+    html = _client().get("/tutorial").text
+    assert "API key" not in html
+    for key in ("qtl:1", "qtl:2", "qtl:3", "gwas:1"):
+        assert f'<td class="mono">{key}</td>' not in html

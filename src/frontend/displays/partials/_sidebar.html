@@ -4,18 +4,28 @@
    Context: preselected_qtl_rows [{dataset, qtl_type, context_ids}], preselected_gwas_rows
    [{dataset, option_ids}], has_qtl_datasets, has_gwas_datasets, locus_mode
    ("gene"|"region"|"variant"), gene, region, variant. #}
-<aside class="db-sidebar">
+<aside class="db-sidebar" id="db-sidebar">
   <div class="db-group" id="db-qtl-group">
     <div class="db-label">QTL</div>
     {% if has_qtl_datasets %}
     <div id="qtl-rows" class="picker-rows"></div>
     <button type="button" id="qtl-add-row" class="db-add-row-btn">+ Add QTL</button>
     <template id="qtl-row-template">
+      {# Grid: column headings on the first line, their dropdowns directly below (base.css
+         .picker-row[data-kind="qtl"]), so boxes stay aligned even when a heading wraps. #}
       <div class="picker-row" data-kind="qtl">
-        <select class="picker-select" data-role="dataset"></select>
-        <select class="picker-select" data-role="source_project_id" disabled></select>
-        <select class="picker-select" data-role="qtl_type" disabled></select>
-        <select class="picker-select" data-role="context" multiple disabled></select>
+        <span class="picker-col-label" aria-hidden="true">Dataset</span>
+        <span class="picker-col-label" aria-hidden="true">Source project ID</span>
+        <span class="picker-col-label" aria-hidden="true">QTL type</span>
+        <span class="picker-col-label" aria-hidden="true">Context</span>
+        <select class="picker-select" data-role="dataset" aria-label="Dataset"></select>
+        <select class="picker-select" data-role="source_project_id" aria-label="Source project ID" disabled></select>
+        <select class="picker-select" data-role="qtl_type" aria-label="QTL type" disabled></select>
+        <div class="picker-context">
+          <input type="search" class="picker-search" data-role="context-search"
+                 placeholder="Search context…" aria-label="Search contexts" autocomplete="off" disabled>
+          <select class="picker-select" data-role="context" aria-label="Context" multiple disabled></select>
+        </div>
         <button type="button" class="picker-row-remove" title="Remove this QTL row">&times;</button>
       </div>
     </template>
@@ -69,6 +79,8 @@
   </div>
 
   <button type="button" id="db-run" class="db-run-btn"><span>&#9654;</span> Run Query</button>
+  {# Shown once a query has results, to get back to them without re-running (browser.js). #}
+  <button type="button" id="db-show-results" class="db-add-row-btn db-show-results-btn" hidden>View QTL results &rarr;</button>
 </aside>
 <script>
   window.PRESELECTED_QTL_ROWS = {{ preselected_qtl_rows | tojson }};

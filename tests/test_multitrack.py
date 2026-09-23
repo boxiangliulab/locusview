@@ -408,6 +408,19 @@ def test_multi_track_variant_mode_by_position() -> None:
     assert body["region"]["end"] == 7_670_000 + 1_000_000
     keys = [t["key"] for t in body["tracks"]]
     assert keys == ["qtl:1", "gwas:1"]
+    assert body["query_variant"] == {"chrom": "17", "position": 7_670_000, "rs_id": None}
+
+
+def test_multi_track_non_variant_mode_has_no_query_variant() -> None:
+    body = (
+        _client()
+        .get(
+            "/api/locus/multi-track",
+            params={"locus_mode": "gene", "gene": "TP53", "datasets": "qtl:1"},
+        )
+        .json()
+    )
+    assert body["query_variant"] is None
 
 
 def test_multi_track_variant_mode_missing_locator_is_400() -> None:
@@ -433,6 +446,11 @@ def test_multi_track_variant_mode_by_rsid_resolves_via_qtl_dataset() -> None:
     )
     assert response.status_code == 200
     assert response.json()["region"]["chrom"] == "17"
+    assert response.json()["query_variant"] == {
+        "chrom": "17",
+        "position": 7_670_000,
+        "rs_id": 12345,
+    }
 
 
 def test_multi_track_variant_mode_by_rsid_works_without_a_qtl_dataset_selected() -> None:

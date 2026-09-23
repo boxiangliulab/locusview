@@ -1,0 +1,205 @@
+{% extends "layout.html" %}
+{% block title %}Search data — locusview{% endblock %}
+{% block content %}
+{# The "Search data" tab (routers/search_data.py): a search box, then one row per context with
+   its most significant association for the searched variant or gene. Context: q, examples,
+   datasets (Data Browser selection, or ""), mode ("variant" | "gene" | "region" | None), title,
+   message, rows [ContextRow, each with .hits], failed, n_searched, p (threshold as typed),
+   default_p. #}
+<div class="search-data">
+  <h1>Search data</h1>
+  <p class="muted lede">Look up a gene or a variant and see which tissues and cell types it is associated in, with p-values.</p>
+
+  <form class="sd-form" action="/search-data" method="get" role="search">
+    <input type="search" name="q" value="{{ q }}" class="sd-input" autocomplete="off"
+           placeholder="Gene, rsID, or position — e.g. TP53, rs1042522, chr17:7676154" aria-label="Search a gene or variant" autofocus>
+    <label class="sd-threshold">
+      <span>p-value &lt;</span>
+      <input type="text" name="p" value="{{ p }}" inputmode="decimal" autocomplete="off"
+             placeholder="{{ default_p }}" aria-label="p-value threshold" title="Only associations with a p-value below this are shown (e.g. 1e-5, 5e-8, 0.05)">
+    </label>
+    {% if datasets %}<input type="hidden" name="datasets" value="{{ datasets }}">{% endif %}
+    <button type="submit" class="sd-submit">Search</button>
+  </form>
+  <div class="sd-examples">
+    <span class="muted">Examples:</span>
+    {% for ex in examples %}<a href="/search-data?q={{ ex | urlencode }}&amp;p={{ p | urlencode }}" class="sd-chip">{{ ex }}</a>{% endfor %}
+  </div>
+  {% if datasets %}
+  <p class="muted sd-scope">
+    Showing only the datasets selected in the Data Browser.
+    <a href="/search-data?q={{ q | urlencode }}&amp;p={{ p | urlencode }}">Search all datasets</a>
+  </p>
+  {% endif %}
+
+  {% if mode == "region" %}
+    <p class="muted sd-message">Search data looks up a single gene or variant. For a region, use the
+      <a href="/browser?locus_mode=region&amp;region={{ q | urlencode }}">Data Browser</a>.</p>
+  {% elif message %}
+    <p class="muted sd-message">{{ message }}</p>
+  {% elif mode %}
+    <div class="sd-results-head">
+      <h2>{{ title }}</h2>
+      <span class="muted">
+        {{ rows | length }} of {{ n_searched }} {{ "datasets" if mode == "variant" else "QTL contexts" }}
+        with {{ "an association at this variant" if mode == "variant" else "a phenotype for this gene" }}
+        at p &lt; {{ p }}
+        {% if mode == "gene" %}&middot; GWAS has no gene concept, so gene searches cover QTL only{% endif %}
+      </span>
+    </div>
+    {% if failed %}
+    <p class="muted sd-message">{{ failed }} dataset{{ "s" if failed != 1 else "" }} could not be searched right now and {{ "are" if failed != 1 else "is" }} missing from the table.</p>
+    {% endif %}
+    {% if rows %}
+    <input type="search" class="sd-filter" id="sd-filter" placeholder="Filter by context, dataset, type, phenotype, or SNP…" aria-label="Filter results">
+    {# Column shares, in % of the gene table's width. Both modes use the same share for the columns
+       they have in common (Context, Dataset, Type, Phenotype, p-value, beta); the variant table
+       lacks Lead SNP + Variant, so its card is just that much narrower (76%) instead of handing
+       the spare width to Phenotype. Columns can also be dragged wider (script below). #}
+    {% set shares = [13, 12, 8, 27, 10, 14, 9, 7] if mode == "gene" else [13, 12, 8, 27, 9, 7] %}
+    {% set total = shares | sum %}
+    <div class="card sd-card" style="width:{{ total }}%">
+      <div class="table-wrap">
+        {# One <tbody> per context: its identifying columns span all of its hit rows, so every
+           phenotype is shown without folding and the filter can show/hide whole contexts. #}
+        <table class="data-table sd-table" id="sd-table">
+          <colgroup>
+            {% for share in shares %}<col style="width:{{ '%.2f' | format(share * 100 / total) }}%">{% endfor %}
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Context</th>
+              <th>Dataset</th>
+              <th>Type</th>
+              <th class="sd-divide">Phenotype</th>
+              {% if mode == "gene" %}
+              <th>Lead SNP</th>
+              <th>Variant</th>
+              {% endif %}
+              <th class="sd-num" data-sort="p" aria-sort="ascending"><button type="button" class="sd-sort" title="Sort by p-value">p-value<span class="sd-arrow" aria-hidden="true"></span></button></th>
+              <th class="sd-num" data-sort="beta"><button type="button" class="sd-sort" title="Sort by &beta;">&beta;<span class="sd-arrow" aria-hidden="true"></span></button></th>
+            </tr>
+          </thead>
+          {% for r in rows %}
+          {% set n = r.hits | length %}
+          <tbody class="sd-group">
+            {% for h in r.hits %}
+            <tr>
+              {% if loop.first %}
+              <td rowspan="{{ n }}" class="sd-context"><div class="sd-context-name">{{ r.context_html }}</div></td>
+              <td rowspan="{{ n }}">{{ r.dataset }}</td>
+              <td rowspan="{{ n }}"><span class="badge {{ 'badge-orange' if r.is_gwas else 'badge-blue' }}">{{ r.type }}</span></td>
+              {% endif %}
+              <td class="mono sd-divide sd-pheno">{% if r.is_gwas %}<span class="muted">&mdash;</span>{% else %}{{ h.phenotype_html }}{% endif %}</td>
+              {% if mode == "gene" %}
+              <td class="mono sd-nowrap">{{ h.snp or "" }}</td>
+              <td class="mono muted sd-variant">{{ h.variant or "" }}</td>
+              {% endif %}
+              <td class="sd-num mono sd-nowrap" data-p="{{ h.pvalue if h.pvalue is not none else '' }}">{{ '%.2e' | format(h.pvalue) if h.pvalue is not none else '' }}</td>
+              <td class="sd-num mono sd-nowrap" data-beta="{{ h.beta if h.beta is not none else '' }}">{{ '%.3f' | format(h.beta) if h.beta is not none else '' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const table = document.getElementById("sd-table");
+        const groups = [...table.querySelectorAll("tbody.sd-group")];
+
+        // Client-side filter: shows each context block whose text (context, dataset, type, any
+        // phenotype or SNP) contains the query.
+        const input = document.getElementById("sd-filter");
+        input.addEventListener("input", () => {
+          const q = input.value.trim().toLowerCase();
+          for (const g of groups) g.hidden = q !== "" && !g.textContent.toLowerCase().includes(q);
+        });
+
+        // Sorting by p-value / beta. Context + Dataset + Type stay one group: rows are sorted
+        // inside each group, and groups are ordered by their first (best) row, so with p-value
+        // ascending (the server's default order) the group holding the smallest p comes first.
+        // Empty values always sort last.
+        const heads = groups.map((g) => [...g.rows[0].querySelectorAll("td[rowspan]")]);
+        const value = (tr, key) => {
+          const raw = tr.querySelector(`td[data-${key}]`).dataset[key];
+          return raw === "" ? null : Number(raw);
+        };
+        const compare = (a, b, dir) =>
+          a === null ? (b === null ? 0 : 1) : b === null ? -1 : dir * (a - b);
+        const sortHeads = [...table.querySelectorAll("th[data-sort]")];
+        let state = { key: "p", dir: 1 };
+
+        function sortBy(key, dir) {
+          state = { key, dir };
+          const order = groups.map((g, i) => {
+            const rows = [...g.rows];
+            for (const td of heads[i]) td.remove();
+            rows.sort((a, b) => compare(value(a, key), value(b, key), dir));
+            rows[0].prepend(...heads[i]);
+            g.append(...rows);
+            return { g, best: value(rows[0], key) };
+          });
+          order.sort((a, b) => compare(a.best, b.best, dir));
+          table.append(...order.map((o) => o.g));
+          for (const th of sortHeads) {
+            if (th.dataset.sort === key) th.setAttribute("aria-sort", dir > 0 ? "ascending" : "descending");
+            else th.removeAttribute("aria-sort");
+          }
+        }
+        for (const th of sortHeads) {
+          th.querySelector("button").addEventListener("click", () => {
+            const key = th.dataset.sort;
+            // First click: p-value ascending (most significant first), beta descending.
+            const dir = state.key === key ? -state.dir : key === "p" ? 1 : -1;
+            sortBy(key, dir);
+          });
+        }
+
+        // Column resizing: drag the right edge of a header; double-click it to reset all widths.
+        const cols = [...table.querySelectorAll("col")];
+        const initial = cols.map((c) => c.style.width);
+        let drag = null;
+        table.querySelectorAll("thead th").forEach((th, i) => {
+          const handle = document.createElement("span");
+          handle.className = "sd-resize";
+          handle.setAttribute("aria-hidden", "true");
+          th.append(handle);
+          handle.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            // Freeze every column at its current pixel width, then only the dragged one changes.
+            const widths = cols.map((c, j) => table.rows[0].cells[j].getBoundingClientRect().width);
+            cols.forEach((c, j) => (c.style.width = widths[j] + "px"));
+            table.style.width = widths.reduce((a, b) => a + b, 0) + "px";
+            drag = { i, x: e.clientX, w: widths[i], total: parseFloat(table.style.width) };
+            handle.setPointerCapture(e.pointerId);
+            table.classList.add("sd-resizing");
+          });
+          handle.addEventListener("pointermove", (e) => {
+            if (!drag) return;
+            const w = Math.max(48, drag.w + e.clientX - drag.x);
+            cols[drag.i].style.width = w + "px";
+            table.style.width = drag.total - drag.w + w + "px";
+          });
+          const end = () => { drag = null; table.classList.remove("sd-resizing"); };
+          handle.addEventListener("pointerup", end);
+          handle.addEventListener("pointercancel", end);
+          handle.addEventListener("dblclick", () => {
+            cols.forEach((c, j) => (c.style.width = initial[j]));
+            table.style.width = "";
+          });
+        });
+      })();
+    </script>
+    {% else %}
+    <p class="muted sd-message">No associations at p &lt; {{ p }}. Try a looser threshold, e.g. 0.05.</p>
+    {% endif %}
+  {% endif %}
+
+  <p class="muted sd-api-link">
+    Need this data in a script? See <a href="/tutorial#request-from-api">Request data from the API</a>
+    in the Tutorial.
+  </p>
+</div>
+{% endblock %}

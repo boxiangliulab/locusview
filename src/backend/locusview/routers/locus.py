@@ -301,6 +301,16 @@ def _qtl_track(
             else {"position": lead.position, "log_pvalue": neg_log10_p(lead.pvalue)}
         )
     dataset_name, qtl_type, population = dataset.catalog_parts
+    status = None
+    if not summaries:
+        status = {
+            "code": "no_data",
+            "message": (
+                "No QTL phenotype or association was found for this gene in this dataset."
+                if gene is not None
+                else "No QTL phenotype overlaps the requested region."
+            ),
+        }
     # Every locus mode deliberately leaves variants empty. The browser requests one selected
     # phenotype's bounded, enriched values from /api/locus/qtl-phenotype on demand.
     variants = _track_variants(assocs, lead) if gene is not None else []
@@ -315,6 +325,7 @@ def _qtl_track(
         "population": population,
         "context": dataset.tissue,
         "lead": lead_payload,
+        "status": status,
         "variants": variants,
         "phenotypes": _group_by_phenotype(assocs)
         if summaries is None
@@ -341,10 +352,17 @@ def _gwas_track(
     assocs = repo.gwas_associations_in_region(chrom, start, end, dataset_id)
     lead = _min_p(assocs)
     trait = gwas_dataset.trait.replace("_", " ")
+    status = None
+    if not assocs:
+        status = {
+            "code": "no_data",
+            "message": "No GWAS variants were found in this gene window.",
+        }
     return {
         "key": f"gwas:{dataset_id}",
         "kind": "gwas",
         "label": f"{trait} ({gwas_dataset.population})",
+        "status": status,
         "lead": None
         if lead is None
         else {"position": lead.position, "log_pvalue": neg_log10_p(lead.pvalue)},
@@ -538,6 +556,9 @@ def router(repo: QtlRepository) -> APIRouter:
             )
 
         resolved_gene: Gene | None = None
+        # Variant mode only: the searched variant itself, so every locuszoom panel can mark it
+        # (static/js/multi-track-plot.js draws it as a pink diamond on top of the lead/LD colors).
+        query_variant: dict[str, object] | None = None
         window_chrom: str
         window_start: int
         window_end: int
@@ -592,17 +613,18 @@ def router(repo: QtlRepository) -> APIRouter:
             window_start = max(0, center - _VARIANT_WINDOW)
             window_end = center + _VARIANT_WINDOW
             label = f"chr{window_chrom}:{center} (+/-{_VARIANT_WINDOW // 1_000_000}MB)"
+            query_variant = {"chrom": window_chrom, "position": center, "rs_id": rsid}
 
         else:
             return JSONResponse({"error": f"unknown locus_mode: {locus_mode}"}, status_code=400)
 
         tracks: list[dict[str, object]] = []
-        try:
-            for key in keys:
-                kind, _, id_str = key.partition(":")
-                if not id_str.isdigit():
-                    continue
-                dataset_id = int(id_str)
+        for key in keys:
+            kind, _, id_str = key.partition(":")
+            if not id_str.isdigit():
+                continue
+            dataset_id = int(id_str)
+            try:
                 track: dict[str, object] | None
                 if kind == "qtl":
                     track = _qtl_track(
@@ -614,8 +636,29 @@ def router(repo: QtlRepository) -> APIRouter:
                     continue
                 if track is not None:
                     tracks.append(track)
-        except RepositoryTimeoutError:
-            return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
+            except RepositoryTimeoutError:
+                tracks.append(
+                    {
+                        "key": key,
+                        "kind": kind,
+                        "label": f"{kind.upper()} dataset {id_str}",
+                        "variants": [],
+                        "status": {"code": "error", "message": _UNINDEXED_QUERY_MESSAGE},
+                    }
+                )
+            except Exception:
+                tracks.append(
+                    {
+                        "key": key,
+                        "kind": kind,
+                        "label": f"{kind.upper()} dataset {id_str}",
+                        "variants": [],
+                        "status": {
+                            "code": "error",
+                            "message": "This dataset request failed; please try again.",
+                        },
+                    }
+                )
 
         return JSONResponse(
             {
@@ -629,6 +672,7 @@ def router(repo: QtlRepository) -> APIRouter:
                     else None
                 ),
                 "region": {"chrom": window_chrom, "start": window_start, "end": window_end},
+                "query_variant": query_variant,
                 "tracks": tracks,
             }
         )
@@ -649,7 +693,18 @@ def router(repo: QtlRepository) -> APIRouter:
         except RepositoryTimeoutError:
             return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
         lead = _min_p(assocs)
-        return JSONResponse({"variants": _track_variants(assocs, lead)})
+        variants = _track_variants(assocs, lead)
+        return JSONResponse(
+            {
+                "variants": variants,
+                "status": None
+                if variants
+                else {
+                    "code": "no_data",
+                    "message": "No association variants were found in the displayed window.",
+                },
+            }
+        )
 
     @router.get("/api/ld")
     def ld(chrom: str, lead: int, population: str = "EUR") -> Response:
@@ -658,7 +713,13 @@ def router(repo: QtlRepository) -> APIRouter:
             return JSONResponse({"error": f"unknown chromosome: {chrom}"}, status_code=400)
         if population not in POPULATIONS:
             return JSONResponse({"error": f"unknown population: {population}"}, status_code=400)
-        r2map = repo.ld_r2(chrom, lead, population)
+        try:
+            r2map = repo.ld_r2(chrom, lead, population)
+        except RepositoryTimeoutError:
+            return JSONResponse(
+                {"error": "LD lookup failed; variants can still be shown without LD colors."},
+                status_code=503,
+            )
         reference_present = bool(r2map)
         if reference_present:
             r2map[lead] = 1.0

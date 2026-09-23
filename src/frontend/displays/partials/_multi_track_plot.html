@@ -1,5 +1,5 @@
-{# Empty containers for the Data Browser Locus View's MIDDLE column (see browser.html for the
-   right-hand "QTL results by phenotype" table): (1) the LD legend — sits above BOTH GWAS and QTL
+{# Empty containers for the Data Browser Locus View's plot column (see browser.html for the
+   "QTL results by phenotype" table, which replaces the sidebar after Run Query): (1) the LD legend — sits above BOTH GWAS and QTL
    sections since either can show LD colors (hidden until at least one plotted panel, GWAS or QTL,
    actually has LD colors — see multi-track-plot.js's gwasUsedLd/qtlUsedLd), (2) GWAS locuszoom
    plot(s), rendered immediately, (3) locuszoom panel(s) for whichever phenotype rows the user has
@@ -12,7 +12,12 @@
   <span><span class="swatch" style="background:#6EFE68"></span>0.4&ndash;0.6</span>
   <span><span class="swatch" style="background:#26BCE1"></span>0.2&ndash;0.4</span>
   <span><span class="swatch" style="background:#463699"></span>&lt;&nbsp;0.2 / not in panel</span>
-  <span class="muted" style="font-size:0.78rem">LD = 1000G phase 3, <span id="db-qtl-ld-population">EUR</span> &middot; points with no rsID aren't shown</span>
+  <span class="muted" style="font-size:0.78rem">LD = 1000G phase 3, <span id="db-qtl-ld-population">EUR</span> &middot; gray = no rsID</span>
+</div>
+{# Variant-mode searches only (browser.js toggles it from the response's query_variant). #}
+<div class="legend" id="db-query-legend" hidden style="margin-bottom:16px">
+  <span><span class="swatch swatch-diamond" style="background:#ec4899"></span>searched variant</span>
+  <span class="muted" style="font-size:0.78rem">pink dotted line = searched position has no association in that dataset</span>
 </div>
 <div id="db-tracks"></div>
 <div id="db-qtl-panels"></div>

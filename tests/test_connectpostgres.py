@@ -222,7 +222,7 @@ def test_eqtls_for_gene_targets_correct_shards() -> None:
     tables = [sql for sql, _ in log]
     assert any("qtl_snp_1 " in sql for sql in tables)
     assert any("qtl_snp_2 " in sql for sql in tables)
-    assert all(params == (141510, 50) for _, params in log)
+    assert all(params == ("141510", 50) for _, params in log)
     assert [a.dataset_id for a in hits] == [1, 2]
 
 
@@ -685,3 +685,140 @@ def test_qtl_contexts_maps_and_labels() -> None:
 def test_qtl_contexts_empty() -> None:
     factory, _ = _factory([])
     assert PostgresQtlRepository(factory).qtl_contexts() == []
+
+
+def test_variant_hits_answers_every_shard_in_one_union_query() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        assert sql.count(" UNION ALL ") == 1
+        assert "FROM qtl_snp_1 s JOIN qtl_snp_1_phenotype p" in sql
+        assert "FROM qtl_snp_7 s JOIN qtl_snp_7_phenotype p" in sql
+        assert params == ("17", 7_676_154, "17", 7_676_154)
+        assert "s.se" not in sql  # Search data doesn't show standard errors
+        return [
+            (1, "17", 7_676_154, 1e-9, 0.5, "141510", "ENSG00000141510.18"),
+            (7, "17", 7_676_154, 0.2, 0.1, None, "chr17_7670000_7680000"),
+        ]
+
+    factory, log = _routing_factory(responder)
+    hits = PostgresQtlRepository(factory).variant_hits("17", 7_676_154, [1, 7])
+    assert [(h.dataset_id, h.gene_id, h.pvalue, h.beta, h.se, h.phenotype_id) for h in hits] == [
+        (1, 141510, 1e-9, 0.5, None, "ENSG00000141510.18"),
+        (7, 0, 0.2, 0.1, None, "chr17_7670000_7680000"),
+    ]
+    assert len(log) == 1
+
+
+def test_gwas_variant_hits_one_union_query_threshold_in_sql_no_se_or_rsid() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        assert sql.count(" UNION ALL ") == 1
+        assert "FROM gwas_snp_1 s" in sql and "FROM gwas_snp_2 s" in sql
+        assert sql.count("AND s.pval < %s") == 2
+        assert "s.se" not in sql and "variant_rsid_mapping_raw" not in sql
+        assert params == ("17", 7_676_154, 1e-4, "17", 7_676_154, 1e-4)
+        return [(2, "17", 7_676_154, 5e-12, 0.2)]
+
+    factory, log = _routing_factory(responder)
+    hits = PostgresQtlRepository(factory).gwas_variant_hits("17", 7_676_154, [1, 2], 1e-4)
+    assert [(h.dataset_id, h.position, h.pvalue, h.beta, h.se, h.rs_id) for h in hits] == [
+        (2, 7_676_154, 5e-12, 0.2, None, None)
+    ]
+    assert len(log) == 1
+
+
+def test_gene_phenotype_leads_matches_peaks_or_gene_id_per_shard_in_one_query() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            assert params == ([1, 3],)
+            return [(1, "eQTL"), (3, "caQTL")]
+        assert sql.count(" UNION ALL ") == 1 and sql.count("CROSS JOIN LATERAL") == 2
+        assert "ORDER BY s.pval LIMIT 1" in sql and "variant_rsid_mapping_raw" in sql
+        assert "s.se" not in sql  # the gene search doesn't show standard errors
+        # eQTL shard 1 matches the zero-padded gene_id; caQTL shard 3 the peak containing the start.
+        assert params == ("012048", "chr17", 43_044_295, 43_044_295)
+        return [
+            (
+                1,
+                "ENSG00000012048.23",
+                "012048",
+                "17",
+                43_050_000,
+                "C",
+                "T",
+                "rs8176318",
+                1e-6,
+                0.4,
+            ),
+            (
+                3,
+                "chr17_43040000_43046000",
+                None,
+                "17",
+                "43044000",
+                None,
+                None,
+                None,
+                "0.01",
+                None,
+            ),
+        ]
+
+    factory, _log = _routing_factory(responder)
+    gene = Gene(12048, "BRCA1", "ENSG00000012048.23", "17", 43_044_295, 43_125_483, "-")
+    leads = PostgresQtlRepository(factory).gene_phenotype_leads(gene, [1, 3])
+    assert [
+        (d, s.phenotype_id, s.gene_id, s.position, s.ref, s.rs_id, s.pvalue, s.beta)
+        for d, s in leads
+    ] == [
+        (1, "ENSG00000012048.23", 12048, 43_050_000, "C", 8176318, 1e-6, 0.4),
+        (3, "chr17_43040000_43046000", None, 43_044_000, None, None, 0.01, None),
+    ]
+
+
+def test_batched_lookups_with_no_datasets_skip_the_query() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, log = _routing_factory(responder)
+    repo = PostgresQtlRepository(factory)
+    gene = Gene(141510, "TP53", "ENSG00000141510.18", "17", 7_661_779, 7_677_434, "-")
+    assert repo.variant_hits("17", 1, []) == []
+    assert repo.gwas_variant_hits("17", 1, []) == []
+    assert repo.gene_phenotype_leads(gene, []) == []
+    assert log == []
+
+
+def test_phenotypes_for_gene_zero_pads_gene_ids_below_100000() -> None:
+    """Phenotype tables store gene_id zero-padded to 6 digits (BRCA1 = "012048")."""
+
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("eQTL",)]
+        if "SELECT phenotype_id, gene_id" in sql:
+            assert params == ("012048",)
+            return [("ENSG00000012048.23", "012048")]
+        raise AssertionError(f"unexpected query: {sql}")
+
+    factory, _log = _routing_factory(responder)
+    gene = Gene(12048, "BRCA1", "ENSG00000012048.23", "17", 43_044_295, 43_125_483, "-")
+    summaries = PostgresQtlRepository(factory).phenotypes_for_gene(gene, 1)
+    assert [s.phenotype_id for s in summaries] == ["ENSG00000012048.23"]
+    assert summaries[0].gene_id == 12048
+
+
+def test_variant_hits_applies_the_pvalue_threshold_in_sql() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        assert sql.count("AND s.pval < %s") == 2
+        assert params == ("17", 7_676_154, 1e-5, "17", 7_676_154, 1e-5)
+        return []
+
+    factory, _log = _routing_factory(responder)
+    assert PostgresQtlRepository(factory).variant_hits("17", 7_676_154, [1, 7], 1e-5) == []
+
+
+def test_gwas_variant_hits_without_threshold_has_no_pval_filter() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        assert "pval <" not in sql and params == ("17", 1)
+        return []
+
+    factory, _log = _routing_factory(responder)
+    assert PostgresQtlRepository(factory).gwas_variant_hits("17", 1, [1]) == []

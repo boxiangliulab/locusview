@@ -2,7 +2,8 @@
 """Find published QTL datasets in the literature, and write the review table.
 
 Subcommands:
-  review    keyword sweep of Europe PMC across QTL query families → qtlliteraturereview TSV
+  review    multi-source keyword sweep → qtlliteraturereview TSV
+  discover  add URL/DOI/PMID/PMCID seeds (always retained, even without data links)
   papers    one ad-hoc Europe PMC query, printed or appended to a review table
   update    record what reading a paper established (download URL, context, sample size…)
   search    fuzzy-search the eQTL Catalogue index for a tissue/cell type/condition
@@ -60,6 +61,14 @@ ACCESSION_RE = re.compile(
 )
 
 QTL_TYPE_PATTERNS = (
+    ("apaQTL", re.compile(r"\b(?:apaqtl|alternative polyadenylation qtl)\b", re.I)),
+    ("isoQTL", re.compile(r"\b(?:isoqtl|isoform qtl)\b", re.I)),
+    ("circQTL", re.compile(r"\b(?:cirqtl|circRNA qtl|circular RNA qtl)\b", re.I)),
+    ("riboQTL", re.compile(r"\b(?:riboqtl|translation qtl|ribosome qtl)\b", re.I)),
+    ("miQTL", re.compile(r"\b(?:miqtl|mirna qtl|microRNA qtl)\b", re.I)),
+    ("tuQTL", re.compile(r"\b(?:tuqtl|transcriptional qtl)\b", re.I)),
+    ("reQTL", re.compile(r"\b(?:reqtl|response qtl|dynamic qtl)\b", re.I)),
+    ("scQTL", re.compile(r"\b(?:scqtl|single[- ]cell qtl)\b", re.I)),
     ("caQTL", re.compile(r"\b(?:caqtl|chromatin accessibility qtl|accessibility qtl)s?\b", re.I)),
     ("sQTL", re.compile(r"\b(?:sqtl|splicing qtl|splice qtl)s?\b", re.I)),
     ("pQTL", re.compile(r"\b(?:pqtl|protein qtl|proteomic qtl)s?\b", re.I)),
@@ -84,6 +93,8 @@ REVIEW_TERM_FAMILIES: dict[str, tuple[str, ...]] = {
         '"metabolite QTL" OR "metabolic QTL" OR mQTL',
         '"lipid QTL" OR lipidomic QTL',
         'riboQTL OR "translation QTL" OR "microRNA QTL" OR miQTL',
+        'apaQTL OR isoQTL OR circQTL OR riboQTL OR miQTL OR tuQTL OR reQTL',
+        '"allele-specific QTL" OR "molecular QTL" OR molQTL OR xQTL',
         '"allele-specific" QTL OR molecular QTL OR molQTL',
     ),
     "single-cell": (
@@ -107,6 +118,10 @@ REVIEW_TERM_FAMILIES: dict[str, tuple[str, ...]] = {
         'QTL AND ("new dataset" OR "newly generated" OR "data release" OR "release of")',
         'QTL AND ("summary statistics" AND ("are available" OR "have been deposited"))',
         '"QTL atlas" OR "QTL resource" OR "QTL browser" OR "QTL portal"',
+    ),
+    "open-web": (
+        'QTL AND ("data availability" OR "summary statistics" OR repository OR accession)',
+        'QTL AND (Nature OR "Nature Communications" OR "Scientific Reports")',
     ),
     "large-sample": (
         'QTL AND ("largest" OR "large-scale" OR "large scale") AND (cohort OR biobank)',
@@ -436,6 +451,27 @@ def _paper_from(raw: dict) -> Paper:
         qtl_types=[label for label, pattern in QTL_TYPE_PATTERNS if pattern.search(text)],
         matched_terms=[],
     )
+
+
+def paper_from_seed(value: str, *, title: str = "", source: str = "seed") -> Paper:
+    """Create a durable candidate from a DOI/PMID/PMCID/URL when indexes miss it."""
+    value = value.strip()
+    doi = ""; pmid = ""
+    url = value if value.startswith(("http://", "https://")) else ""
+    m = re.search(r"10\.\d{4,9}/[^\s?#]+", value, re.I)
+    if m:
+        doi = m.group(0).rstrip(".,;)"); url = f"https://doi.org/{doi}"
+    # Nature article URLs expose the article identifier but not the DOI.
+    if not doi:
+        m = re.search(r"/articles/(s41467-\d{3}-\d{5}-\d+)", value, re.I)
+        if m:
+            doi = "10.1038/" + m.group(1).lower(); url = value
+    m = re.search(r"(?:pmid[:/ ]?)(\d{6,9})", value, re.I)
+    if m:
+        pmid = m.group(1); url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+    return Paper(pmid=pmid, doi=doi, title=title or value, journal="", year="", authors="",
+                 is_open_access=False, has_data=False, accessions=[], emails=[], urls=[url] if url else [],
+                 qtl_types=["QTL"], matched_terms=[source])
 
 
 PAGE_SIZE = 1000  # Europe PMC's per-request maximum.
@@ -1515,6 +1551,22 @@ def cmd_papers(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_discover(args: argparse.Namespace) -> int:
+    seeds = list(args.seed)
+    if args.seed_file:
+        seeds.extend(x.strip() for x in args.seed_file.read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#"))
+    found = [paper_from_seed(x, title=args.title, source=args.source) for x in seeds]
+    if not found:
+        raise ValueError("provide --seed or --seed-file")
+    if args.append and args.append.exists():
+        added = append_review(args.append, found, args.search_date)
+        print(f"added {added} seed candidates to {args.append}")
+    else:
+        out = review_table_path(args.out, args.search_date); write_review(out, found, args.search_date)
+        print(f"wrote {len(found)} seed candidates to {out}")
+    return 0
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     families = tuple(args.families)
     unknown = [f for f in families if f not in REVIEW_TERM_FAMILIES]
@@ -1605,6 +1657,16 @@ def main() -> int:
 
     def add_release(p: argparse.ArgumentParser) -> None:
         p.add_argument("--release", default="r7", choices=["r7", "r8", "r8_beta"])
+
+    s = sub.add_parser("discover", help="retain URL/DOI/PMID seeds as review candidates")
+    s.add_argument("--seed", action="append", default=[], help="article URL, DOI, PMID or PMCID")
+    s.add_argument("--title", default="", help="title for a seed when an index has not supplied one")
+    s.add_argument("--seed-file", type=Path)
+    s.add_argument("--source", default="google;google-scholar;europmc;pmc")
+    s.add_argument("--out", type=Path)
+    s.add_argument("--append", type=Path)
+    s.add_argument("--search-date", default=today)
+    s.set_defaults(func=cmd_discover)
 
     s = sub.add_parser(
         "review", help="keyword sweep of Europe PMC → qtlliteraturereview-<date>.tsv"

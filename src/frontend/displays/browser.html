@@ -4,6 +4,13 @@
 <div class="db-layout">
   {% include "partials/_sidebar.html" %}
 
+  {# After Run Query the "QTL results by phenotype" table takes the sidebar's place (browser.js
+     showResultsPanel); the back button returns to the dataset/context picker. #}
+  <aside class="db-sidebar db-results-panel" id="db-results-panel" hidden>
+    <button type="button" class="db-back-btn" id="db-back">&larr; Back to select context</button>
+    <div id="db-qtl-table-area"></div>
+  </aside>
+
   <div class="db-main" id="db-main">
     <div class="db-empty" id="db-empty">
       <p>Select a locus and click Run Query.</p>
@@ -18,17 +25,9 @@
           <div class="db-external-links" id="db-gene-links" hidden></div>
         </div>
       </div>
-      <div class="db-results-row">
-        <div class="db-results-plots">
-          {% include "partials/_multi_track_plot.html" %}
-        </div>
-        <div class="db-results-side">
-          <div id="db-qtl-table-area"></div>
-        </div>
-      </div>
+      {% include "partials/_multi_track_plot.html" %}
     </div>
 
-    <div id="db-stats-area" hidden></div>
     <p class="muted" id="db-error" hidden></p>
   </div>
 </div>

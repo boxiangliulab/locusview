@@ -24,6 +24,16 @@
   .tutorial-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
   .tutorial-table tbody tr:last-child td { border-bottom: 0; }
   .tutorial-table tbody tr:hover { background: #f8fafc; }
+  .tutorial-api { max-width: 900px; }
+  .tutorial-api h3 { font-size: 15px; margin: 22px 0 8px; }
+  .tutorial-api p, .tutorial-api li { color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+  .tutorial-api ul { padding-left: 20px; margin: 0; }
+  .tutorial-api code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
+  .tutorial-api .tutorial-table td { white-space: normal; vertical-align: top; }
+  .tutorial-code {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+    font-size: 12.5px; line-height: 1.55; overflow-x: auto; margin: 0;
+  }
   @media (max-width: 760px) { .tutorial-steps { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
@@ -32,7 +42,9 @@
   <h1>Tutorial</h1>
   <p class="tutorial-intro">
     Use Data Browser to select one or more QTL or GWAS datasets, choose a gene, genomic region,
-    or variant, and run the query. The tables below list the concrete datasets currently available.
+    or variant, and run the query. To pull results into a script, see
+    <a href="#request-from-api">Request data from the API</a>. The tables below list the concrete
+    datasets currently available.
   </p>
 
   <div class="tutorial-steps">
@@ -40,6 +52,60 @@
     <div class="tutorial-step"><strong>2. Enter a locus</strong><span>Search by gene symbol or Ensembl ID, genomic interval, rsID, or chromosome position.</span></div>
     <div class="tutorial-step"><strong>3. Explore results</strong><span>Compare LocusZoom plots, inspect LD, and click SNPs for cross-dataset p-values.</span></div>
   </div>
+
+  <section class="tutorial-section tutorial-api" id="request-from-api">
+    <h2>Request data from the API</h2>
+    <p>
+      Everything the <a href="/search-data">Search data</a> page shows is also available as JSON at
+      <code>/api/search-data</code>, so you can fetch it from Python (or any HTTP client) with the same
+      search terms.
+    </p>
+
+    <h3>Parameters</h3>
+    <div class="tutorial-table-wrap">
+      <table class="tutorial-table">
+        <thead><tr><th>Parameter</th><th>Required</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">q</td><td>yes</td><td>Gene symbol (<code>TP53</code>), Ensembl ID (<code>ENSG00000141510</code>), rsID (<code>rs1042522</code>), or position (<code>chr17:7676154</code>).</td></tr>
+          <tr><td class="mono">p</td><td>no</td><td>p-value threshold: only associations with a p-value below it are returned. Default <code>{{ default_p }}</code>; any number between 0 and 1 (<code>1</code> returns everything).</td></tr>
+          <tr><td class="mono">datasets</td><td>no</td><td>Limit the search to specific datasets, comma-separated, e.g. <code>qtl:1,qtl:5,gwas:1</code>. Default: all datasets.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Example (Python)</h3>
+<pre class="tutorial-code"><code>import requests
+import pandas as pd
+
+base = "<span id="tutorial-origin">https://your-locusview-host</span>"
+r = requests.get(f"{base}/api/search-data", params={"q": "TP53", "p": {{ default_p }}}, timeout=60)
+r.raise_for_status()
+data = r.json()
+
+print(data["type"], data["n_contexts"], "contexts,", data["n_rows"], "rows")
+
+# The same table as the Search data page, row for row
+df = pd.DataFrame(data["rows"])</code></pre>
+    <p>Try it in the browser: <a href="/api/search-data?q=TP53&amp;p={{ default_p }}"><code>/api/search-data?q=TP53&amp;p={{ default_p }}</code></a>
+      &middot; interactive reference: <a href="/docs">/docs</a></p>
+
+    <h3>Response</h3>
+    <ul>
+      <li><code>type</code> is <code>"gene"</code> or <code>"variant"</code>; <code>gene</code> / <code>variant</code> describe what was resolved (symbol, Ensembl ID and coordinates, or chromosome, position and rsID).</li>
+      <li><code>datasets_searched</code> and <code>datasets_failed</code> (could not be searched in time — retrying usually works) summarize the search.</li>
+      <li><code>rows</code> is exactly the table on the <a href="/search-data">Search data</a> page — same rows, same order, same columns:
+        gene searches <code>context</code>, <code>dataset</code>, <code>type</code>, <code>phenotype</code>, <code>lead_snp</code>, <code>variant</code>, <code>pvalue</code>, <code>beta</code>;
+        variant searches <code>context</code>, <code>dataset</code>, <code>type</code>, <code>phenotype</code>, <code>pvalue</code>, <code>beta</code>
+        (<code>phenotype</code> is <code>null</code> for GWAS rows). p-values and β come back at full precision; the page only rounds them for display.</li>
+      <li><code>n_contexts</code> and <code>n_rows</code> count the contexts and table rows.</li>
+      <li>Gene searches cover QTL only (GWAS has no gene concept); variant searches cover QTL and GWAS.</li>
+      <li>Errors return <code>{"query": ..., "error": ...}</code> with status <code>400</code> (missing <code>q</code>, invalid <code>p</code>, unrecognized input, or a region — use the Data Browser for regions) or <code>404</code> (unknown gene or rsID).</li>
+    </ul>
+    <script>
+      // Fill in the address this page was actually reached at (works behind proxies/tunnels).
+      document.getElementById("tutorial-origin").textContent = location.origin;
+    </script>
+  </section>
 
   <section class="tutorial-section">
     <h2>GWAS datasets</h2>

@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from locusview import __version__
@@ -24,6 +25,7 @@ from locusview.routers import home as home_router
 from locusview.routers import locus as locus_router
 from locusview.routers import news as news_router
 from locusview.routers import search as search_router
+from locusview.routers import search_data as search_data_router
 from locusview.routers import tutorial as tutorial_router
 
 # static/ lives in the sibling frontend/ folder (src/backend/locusview/web.py -> src/backend/
@@ -49,6 +51,9 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
     """Build and return the locusview FastAPI application."""
     repo = repository if repository is not None else _default_repository()
     app = FastAPI(title="locusview", version=__version__)
+    # Search data's fully expanded tables are large and very repetitive HTML (a well-studied
+    # variant is ~35k rows / ~12 MB raw); gzip shrinks that by an order of magnitude.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.include_router(home_router.router(repo))
     app.include_router(news_router.router(repo))
@@ -58,6 +63,7 @@ def create_app(repository: QtlRepository | None = None) -> FastAPI:
     app.include_router(browser_router.router(repo))
     app.include_router(comparison_router.router(repo))
     app.include_router(search_router.router(repo))
+    app.include_router(search_data_router.router(repo))
 
     @app.get("/health")
     def health() -> dict[str, str]:

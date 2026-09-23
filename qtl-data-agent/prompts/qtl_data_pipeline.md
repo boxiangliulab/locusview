@@ -16,9 +16,9 @@ corrects values it checked against the paper, always explaining the correction i
 
 Read a skill's `SKILL.md` before using it. Run the stages in order.
 
-1. **qtl-data-finder — search.** Sweep Europe PMC with `review` across the keyword families:
+1. **qtl-data-finder — search.** Search Google Search, Google Scholar, Europe PMC and PMC; use `review` across the keyword families:
    molecular QTL type, single-cell/cell-type QTL, context and condition QTL, newly released
-   datasets, and large-cohort studies. Search for recall, not precision, and record the scope
+   datasets, and large-cohort studies. Search for recall, not precision, preserve every URL/DOI seed (even when data are not found), and record the scope
    searched. Then read every paper that may carry a dataset — Methods, Data Availability,
    supplements, the repository or portal it names — and write what it says back with `update`:
    dataset name, QTL type, context, population, donor sample size, corresponding-author address,

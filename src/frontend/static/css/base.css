@@ -127,6 +127,7 @@ select {
   display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
   vertical-align: middle; margin-right: 3px;
 }
+.swatch-diamond { transform: rotate(45deg) scale(0.85); border-radius: 1px; }
 
 table.data-table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.92rem; }
 table.data-table th, table.data-table td {
@@ -143,26 +144,113 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 .badge-blue { background: var(--accent-soft); color: #1d4ed8; }
 .badge-orange { background: #ffedd5; color: #9a3412; }
 
+/* ── Search data tab (search_data.html) ──────────────────────────────────── */
+/* The tab's content lives in one column 80% of the window wide (so it grows as the window is
+   widened), everything in it left-aligned; the results table fills the column. On narrow
+   windows the column takes the full width. */
+.search-data { width: 80%; margin: 0 auto; padding: 36px 0; }
+@media (max-width: 900px) { .search-data { width: auto; padding: 36px 16px; } }
+.search-data .sd-form { max-width: 900px; }
+.search-data h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+.search-data .lede { font-size: 13.5px; margin: 0 0 22px; }
+.sd-form { display: flex; gap: 8px; }
+.sd-input {
+  flex: 1; min-width: 0; padding: 10px 14px; font-size: 15px; border: 1px solid var(--line);
+  border-radius: 8px; font-family: var(--sans); background: var(--surface); color: var(--ink);
+}
+.sd-input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.sd-submit {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0 20px;
+  font-size: 14.5px; font-weight: 600; cursor: pointer; font-family: var(--sans);
+}
+.sd-submit:hover { background: #1d4ed8; }
+.sd-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; }
+.sd-chip {
+  padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 12.5px;
+}
+.sd-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sd-scope { font-size: 13px; margin: 12px 0 0; }
+.sd-message { font-size: 14px; margin: 24px 0 0; }
+.sd-results-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin: 30px 0 12px; }
+.sd-results-head h2 { font-size: 18px; font-weight: 600; margin: 0; }
+.sd-results-head .muted { font-size: 13px; }
+.sd-filter {
+  width: min(100%, 360px); box-sizing: border-box; padding: 7px 10px; font-size: 13.5px;
+  border: 1px solid var(--line); border-radius: 6px; margin: 0 0 10px; font-family: var(--sans);
+  display: block;
+}
+/* Results card "floats" above the page: a soft drop shadow, and a fill a shade darker than the
+   page background (--bg #f8fafc) rather than the usual white card surface. */
+.sd-card {
+  padding: 0; overflow: hidden; width: 100%; background: #f1f5f9;
+  box-shadow: 0 10px 28px -6px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+/* table-layout: fixed makes the <colgroup> widths (search_data.html) exact; long phenotype IDs wrap. */
+.sd-table { width: 100%; table-layout: fixed; }
+.sd-table td { overflow-wrap: anywhere; }
+.sd-table th, .sd-table td { padding: 8px 12px; }
+/* Values that must never break mid-token (rsID, p-value, beta); the variant wraps only at its
+   space, before the alleles. */
+.sd-table td.sd-nowrap { white-space: nowrap; overflow-wrap: normal; }
+.sd-table td.sd-variant { overflow-wrap: normal; }
+.sd-table td.sd-pheno { overflow-wrap: normal; word-break: normal; }
+.sd-table td { vertical-align: top; }
+.sd-table tbody.sd-group { border-top: 2px solid var(--line); }
+.sd-context { font-weight: 600; }
+/* Header controls (search_data.html script): p-value / beta sort buttons and a drag handle on
+   each header's right edge for resizing columns. */
+.sd-table th { position: relative; }
+.sd-sort {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: inherit;
+}
+.sd-sort:hover { color: var(--accent); }
+.sd-sort:focus-visible { outline: 2px solid var(--accent-soft); border-radius: 3px; }
+.sd-arrow::after { content: "\2195"; opacity: 0.35; font-size: 0.85em; }
+th[aria-sort="ascending"] .sd-arrow::after { content: "\2191"; opacity: 1; }
+th[aria-sort="descending"] .sd-arrow::after { content: "\2193"; opacity: 1; }
+.sd-resize {
+  position: absolute; top: 0; right: -4px; width: 8px; height: 100%; z-index: 1;
+  cursor: col-resize; touch-action: none;
+}
+.sd-resize:hover, .sd-resizing .sd-resize:active { background: var(--accent-soft); }
+.sd-resizing { cursor: col-resize; user-select: none; }
+.sd-strong { font-weight: 600; }
+.sd-divide { border-left: 1px solid var(--line); }
+.sd-table th.sd-num, .sd-table td.sd-num { text-align: center; font-variant-numeric: tabular-nums; }
+.sd-threshold {
+  display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--surface); font-size: 13.5px; color: var(--muted);
+  white-space: nowrap;
+}
+.sd-threshold input {
+  width: 72px; border: none; outline: none; padding: 9px 0; font-size: 14.5px;
+  font-family: var(--mono); background: transparent; color: var(--ink);
+}
+.sd-threshold:focus-within { border-color: var(--accent); }
+@media (max-width: 640px) { .sd-form { flex-wrap: wrap; } .sd-input { flex-basis: 100%; } }
+.sd-api-link { font-size: 13px; margin: 40px 0 0; }
+
 /* ── Data Browser sidebar ──────────────────────────────────────────────── */
 
 .db-layout { flex: 1; display: flex; overflow: hidden; height: calc(100vh - 56px); }
 .db-sidebar {
-  width: 460px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--line);
+  width: 35%; min-width: 360px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--line);
   overflow-y: auto; overflow-x: hidden; padding: 18px 16px; display: flex; flex-direction: column;
   gap: 18px;
 }
 .db-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.db-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+.db-label { font-size: 13px; color: var(--muted); font-weight: 500; }
 .db-toggle {
   display: flex; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
   padding: 2px; gap: 2px;
 }
 .db-toggle-btn {
   flex: 1; border: none; background: none; padding: 6px 10px; border-radius: 5px;
-  font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; font-family: var(--sans);
+  font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; font-family: var(--sans);
 }
 .db-toggle-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
-.db-checkbox-empty { font-size: 11px; padding: 4px; margin: 0; }
+.db-checkbox-empty { font-size: 13px; padding: 4px; margin: 0; }
 
 /* Cascading QTL/GWAS picker (static/js/browser-picker.js) */
 .picker-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -172,35 +260,57 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 }
 .picker-select {
   flex: 1 1 0; min-width: 0; box-sizing: border-box; border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 6px; font-size: 11.5px; font-family: var(--sans);
+  border-radius: 6px; padding: 6px 7px; font-size: 13.5px; font-family: var(--sans);
   background: var(--surface); color: var(--ink);
 }
 .picker-select:disabled { color: var(--faint); background: var(--bg); }
-.picker-select[multiple] { min-height: 96px; align-self: stretch; flex: 1.3 1 0; }
-.picker-select[multiple] option { padding: 2px 4px; }
+.picker-select[multiple] { min-height: 120px; align-self: stretch; flex: 1.3 1 0; }
+.picker-select[multiple] option { padding: 3px 4px; }
+/* QTL Context column: a type-to-filter search box stacked above the multi-select. */
+.picker-context { flex: 1.3 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.picker-context .picker-select[multiple] { flex: none; width: 100%; }
+.picker-search {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 7px; font-size: 13.5px; font-family: var(--sans); background: var(--surface);
+  color: var(--ink);
+}
+.picker-search:disabled { background: var(--bg); }
 .picker-row-remove {
   flex-shrink: 0; border: none; background: none; color: var(--faint); cursor: pointer;
-  font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+  font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: 4px;
 }
 .picker-row-remove:hover { background: var(--line); color: var(--ink); }
+/* QTL row: headings (Dataset / Source project ID / QTL type / Context) on the first grid line,
+   their dropdowns directly below; the remove button sits at the end of the dropdown line. */
+.picker-row[data-kind="qtl"] {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2.6fr) auto;
+  column-gap: 4px; row-gap: 3px; align-items: start;
+}
+.picker-col-label {
+  font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.25; align-self: end;
+  overflow-wrap: anywhere;
+}
+.picker-row[data-kind="qtl"] .picker-col-label:nth-child(4) { grid-column: 4 / span 2; }
+.picker-row[data-kind="qtl"] .picker-select { width: 100%; }
+.picker-row[data-kind="qtl"] .picker-row-remove { grid-row: 2; grid-column: 5; }
 .db-add-row-btn {
   align-self: flex-start; border: 1px dashed var(--line); background: none; color: var(--accent);
-  font-size: 12px; font-weight: 500; padding: 5px 10px; border-radius: 6px; cursor: pointer;
+  font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 6px; cursor: pointer;
   font-family: var(--sans);
 }
 .db-add-row-btn:hover { background: var(--accent-soft); }
 .db-locus-input input[type="text"] {
-  width: 100%; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 6px;
+  width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--line); border-radius: 6px;
   font-family: var(--sans); box-sizing: border-box;
 }
-.db-hint { font-size: 11px; color: var(--faint); margin-top: 5px; }
+.db-hint { font-size: 12.5px; color: var(--faint); margin-top: 5px; }
 .db-note {
   background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 7px; padding: 10px 12px;
   font-size: 12px; color: #3b82f6; line-height: 1.6;
 }
 .db-run-btn {
-  background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 9px 12px;
-  font-size: 13.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center;
+  background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 10px 12px;
+  font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center;
   justify-content: center; gap: 7px; font-family: var(--sans);
 }
 .db-run-btn:hover { background: #1d4ed8; }
@@ -221,11 +331,29 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 }
 .db-external-links a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 
-/* Results area: locuszoom plots (GWAS then selected QTL phenotypes) in the middle, the QTL
-   results-by-phenotype table in a fixed-width column on the right. */
-.db-results-row { display: flex; gap: 20px; align-items: flex-start; }
-.db-results-plots { flex: 1; min-width: 0; }
-.db-results-side { flex: 0 0 540px; min-width: 0; }
+/* After Run Query the QTL results-by-phenotype table replaces the sidebar (same width/slot),
+   with a back button to the picker; the locuszoom plots keep the main column. */
+.db-results-panel { gap: 12px; }
+.db-back-btn {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-size: 13.5px; font-weight: 500; padding: 6px 12px;
+  border-radius: 6px; cursor: pointer; font-family: var(--sans);
+}
+.db-back-btn:hover { border-color: var(--accent); color: var(--accent); }
+.db-show-results-btn { align-self: stretch; border-style: solid; }
+/* The table fits the 35%-wide sidebar: the short Dataset / Source ID / QTL type /
+   Population columns shrink to their content (width:1%), wrapping only between words, which leaves
+   the rest of the width to the long Context and Phenotype ID values (Phenotype ID asks for more).
+   Those two wrap anywhere but keep a floor — a whole Ensembl id for Phenotype ID — via their inner
+   <div>'s min-width (table cells ignore min-width themselves); below that the table scrolls. */
+.db-results-panel table.data-table { font-size: 12.5px; margin-top: 0; }
+.db-results-panel table.data-table th, .db-results-panel table.data-table td { padding: 6px 7px; }
+.db-results-panel table.data-table .qtl-tight { width: 1%; }
+.db-results-panel table.data-table .qtl-wide { width: 40%; overflow-wrap: anywhere; }
+.db-results-panel table.data-table .qtl-pheno { width: 60%; }
+.db-results-panel table.data-table td.qtl-wide > div { min-width: 8em; }
+.db-results-panel table.data-table td.qtl-pheno > div { min-width: 18.5ch; }
+
 
 .track-panel {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
@@ -241,6 +369,8 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 .track-panel-kind-gwas { background: #7c3aed; }
 .track-panel-label { font-size: 13px; font-weight: 600; color: var(--ink); }
 .track-panel-n { font-size: 11px; margin-left: auto; }
+.track-panel-status { font-size: 11px; margin: 4px 0 8px; line-height: 1.45; }
+.track-status-line { font-size: 11px; margin: 6px 0; line-height: 1.45; }
 .track-panel-plot { width: 100%; height: auto; aspect-ratio: 8 / 3; }
 
 /* ── Per-plot "download as SVG" button (static/js/plot-download.js) ────── */

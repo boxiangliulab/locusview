@@ -1,4 +1,5 @@
-"""Tutorial page: a short guide plus live, row-level QTL and GWAS dataset catalogs."""
+"""Tutorial page: a short guide, how to request data from the Search data JSON API
+(``routers/search_data.py``), plus live, row-level QTL and GWAS dataset catalogs."""
 
 from __future__ import annotations
 
@@ -6,6 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 from locusview.requestinfo import QtlRepository
+from locusview.routers.search_data import DEFAULT_P
 from locusview.templating import render as _render
 
 
@@ -34,6 +36,7 @@ def router(repo: QtlRepository) -> APIRouter:
 
         gwas_rows = [
             {
+                "id": entry.id,
                 "datasource": entry.source,
                 "accession_id": entry.accession,
                 "trait_id": entry.trait,
@@ -48,6 +51,7 @@ def router(repo: QtlRepository) -> APIRouter:
             active="tutorial",
             qtl_rows=qtl_rows,
             gwas_rows=gwas_rows,
+            default_p=DEFAULT_P,
         )
 
     return router

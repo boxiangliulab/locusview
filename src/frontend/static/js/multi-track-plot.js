@@ -8,7 +8,7 @@
 // rsID-bearing point means the panel still gets LD-colored instead of silently getting none) —
 // before drawing, so GWAS points are LD-colored whenever ANY variant nearby has an rsID
 // (GwasAssociation is enriched via connectpostgres.py's gwas_associations_in_region — see its
-// docstring for the join/perf notes).
+// docstring for the join/perf notes). Points without an rsID remain visible in gray.
 //
 // QTL results DON'T auto-plot — a genomic window can legitimately match many different
 // phenotypes at once (see routers/locus.py's _group_by_phenotype), so instead of one blob of
@@ -20,10 +20,8 @@
 // plot's click-to-recolor uses) and LD-colors every point that also has an rsID, mirroring
 // regional-plot.js's r2color scheme exactly — a point whose rsID has no r² on record with the
 // pivot still shows, in the "< 0.2 / not in panel" color (the 1000G table only stores pairs
-// >= 0.2, see ld_r2's docstring). Once LD is available for a panel, points with NO rsID at all are
-// dropped (no way to color or look them up); with no rsID-bearing variant at all, LD just isn't
-// available and every point still shows in the plain fixed color, marked by the true statistical
-// lead instead. The user can freely check/uncheck rows and the panels update to match.
+// >= 0.2, see ld_r2's docstring). Points without an rsID remain visible in gray. The user can
+// freely check/uncheck rows and the panels update to match.
 // gwasUsedLd/qtlUsedLd track each source's own last render so the shared LD legend
 // (#db-qtl-ld-legend) stays visible if *either* is currently showing LD colors.
 //
@@ -33,7 +31,14 @@
 const MultiTrackPlot = (() => {
   const TRACK_COLOR = { qtl: "#2563eb", gwas: "#7c3aed" };
   const LEAD_COLOR = "#f97316";
+  // Variant-mode searches mark the searched variant with a pink diamond drawn over the lead/LD
+  // colors (see queryVariantMarker()).
+  const QUERY_COLOR = "#ec4899";
+  // Every locuszoom marker (SNP points, lead diamonds, searched-variant diamond) is drawn at 1.3x
+  // its base size below, keeping their relative sizes.
+  const MARKER_SCALE = 1.3;
   const LD_BINS = [[0.2, "#463699"], [0.4, "#26BCE1"], [0.6, "#6EFE68"], [0.8, "#F8C32A"], [1.01, "#DB3D11"]];
+  const LD_NO_RSID_COLOR = "#AAAAAA";
   let gwasUsedLd = false;
   let qtlUsedLd = false;
 
@@ -42,11 +47,10 @@ const MultiTrackPlot = (() => {
     if (legendEl) legendEl.hidden = !(gwasUsedLd || qtlUsedLd);
   }
 
-  // No hasRsid param — points with no rsID never reach this: render()/renderQtlPanels() filter
-  // them out before coloring once LD is fetched (they can't be looked up), so every call here is
-  // for a variant that does have one.
-  function r2Color(r2, isLead) {
+  // Points without an rsID remain visible in gray because they cannot be looked up in the LD panel.
+  function r2Color(r2, isLead, hasRsid = true) {
     if (isLead) return LEAD_COLOR;
+    if (!hasRsid) return LD_NO_RSID_COLOR;
     if (r2 === null || r2 === undefined) return LD_BINS[0][1];
     for (const [upper, color] of LD_BINS) {
       if (r2 < upper) return color;
@@ -100,43 +104,85 @@ const MultiTrackPlot = (() => {
     });
   }
 
+  // The searched variant's plotted point(s) in this panel as an extra pink-diamond trace, or — when
+  // this dataset has no association at that position — a pink dotted vertical line at it instead,
+  // so the searched position is still visible. An rsID search keeps only the points carrying that
+  // rsID when any do (a position can hold several alleles). Returns {traces, shapes}.
+  function queryVariantMarker(v, region, queryVariant, customdata) {
+    if (!queryVariant) return { traces: [], shapes: [] };
+    let hits = v.map((d, i) => i).filter((i) => v[i].position === queryVariant.position);
+    if (queryVariant.rs_id != null) {
+      const sameRsid = hits.filter((i) => v[i].rs_id === queryVariant.rs_id);
+      if (sameRsid.length) hits = sameRsid;
+    }
+    const name = queryVariant.rs_id != null
+      ? "rs" + queryVariant.rs_id
+      : `chr${region.chrom}:${queryVariant.position.toLocaleString()}`;
+    if (!hits.length) {
+      const x = queryVariant.position / 1e6;
+      return {
+        traces: [],
+        shapes: [{ type: "line", yref: "paper", x0: x, x1: x, y0: 0, y1: 1, line: { color: QUERY_COLOR, width: 1.5, dash: "dot" } }],
+      };
+    }
+    return {
+      traces: [{
+        type: "scattergl",
+        mode: "markers",
+        x: hits.map((i) => v[i].position / 1e6),
+        y: hits.map((i) => v[i].log_pvalue),
+        customdata: hits.map((i) => customdata[i]),
+        marker: { color: QUERY_COLOR, size: 14 * MARKER_SCALE, symbol: "diamond", opacity: 1, line: { color: "#9d174d", width: 1.5 } },
+        hovertemplate:
+          `<b>Searched variant ${name}</b><br>chr${region.chrom}:%{customdata[0]:,}<br>p=%{customdata[1]:.2e}` +
+          "<extra></extra>",
+      }],
+      shapes: [],
+    };
+  }
+
   // Draw one Plotly scattergl panel for a single track (GWAS, or one QTL phenotype), appended
-  // into `container`, wiring click-to-pin for QTL points.
-  function renderTrack(container, track, region, onPointClick) {
+  // into `container`, wiring click-to-pin for QTL points. `queryVariant` ({chrom, position,
+  // rs_id}, variant-mode searches only) adds the pink searched-variant marker.
+  function renderTrack(container, track, region, onPointClick, queryVariant) {
     const panel = document.createElement("div");
     panel.className = "track-panel";
+    const status = track.status?.message || (!track.variants?.length ? "No association variants were returned for this dataset." : "");
     panel.innerHTML = `
       <div class="track-panel-header">
         <span class="track-panel-kind track-panel-kind-${track.kind}">${track.kind.toUpperCase()}</span>
         <span class="track-panel-label">${track.label}</span>
         ${track.kind === "qtl" ? "" : '<span class="muted mono track-panel-n">click-to-compare unavailable for GWAS</span>'}
       </div>
-      <div id="${panelId(track.key)}" class="track-panel-plot"></div>
+      ${track.notice ? `<p class="muted track-panel-status">${track.notice}</p>` : ""}
+      ${status ? `<p class="muted track-panel-status">${status}</p>` : `<div id="${panelId(track.key)}" class="track-panel-plot"></div>`}
     `;
     container.appendChild(panel);
+    if (status) return;
 
     const plotDiv = panel.querySelector(".track-panel-plot");
     const fallbackColor = TRACK_COLOR[track.kind] || "#64748b";
     const v = track.variants;
-    const hasAnyRsid = v.some((d) => d.rs_id);
+    const hasAnyRsid = v.some((d) => d.rs_id !== null && d.rs_id !== undefined);
     const hasAnyLd = v.some((d) => d.color);
+    const customdata = v.map((d) => [
+      d.position,
+      d.pvalue,
+      d.is_lead,
+      d.rs_id ? "rs" + d.rs_id : "",
+      d.color ? r2Label(d.r2) : "",
+    ]);
     const trace = {
       type: "scattergl",
       mode: "markers",
       x: v.map((d) => d.position / 1e6),
       y: v.map((d) => d.log_pvalue),
-      customdata: v.map((d) => [
-        d.position,
-        d.pvalue,
-        d.is_lead,
-        d.rs_id ? "rs" + d.rs_id : "",
-        d.color ? r2Label(d.r2) : "",
-      ]),
+      customdata,
       marker: {
         // d.color (set once LD is fetched) wins when present; otherwise the plain fixed-color/
         // lead scheme, matching today's behaviour when LD isn't available.
         color: v.map((d) => d.color || (d.is_lead ? LEAD_COLOR : fallbackColor)),
-        size: v.map((d) => (d.is_lead ? 11 : 6)),
+        size: v.map((d) => (d.is_lead ? 11 : 6) * MARKER_SCALE),
         symbol: v.map((d) => (d.is_lead ? "diamond" : "circle")),
         opacity: 0.75,
         line: { width: 0 },
@@ -147,6 +193,7 @@ const MultiTrackPlot = (() => {
         (hasAnyLd ? "<br>r<sup>2</sup>=%{customdata[4]}" : "") +
         "<extra></extra>",
     };
+    const queryMarker = queryVariantMarker(v, region, queryVariant, customdata);
     const layout = {
       margin: { t: 6, r: 8, b: 40, l: 50 },
       hovermode: "closest",
@@ -162,9 +209,11 @@ const MultiTrackPlot = (() => {
       font: { color: "#334155", size: 11 },
       shapes: [
         { type: "line", xref: "paper", x0: 0, x1: 1, y0: 7.301, y1: 7.301, line: { color: "#94a3b8", width: 1, dash: "dot" } },
+        ...queryMarker.shapes,
       ],
+      showlegend: false,
     };
-    Plotly.newPlot(plotDiv, [trace], layout, { responsive: true, displayModeBar: false });
+    Plotly.newPlot(plotDiv, [trace, ...queryMarker.traces], layout, { responsive: true, displayModeBar: false });
     // Bottom-right "↓ SVG" export for this panel (static/js/plot-download.js). Attached after
     // newPlot so the export always sees a plotted div; it wraps plotDiv rather than living inside
     // it, so purgePanels()'s Plotly.purge() can't strip the button.
@@ -194,33 +243,34 @@ const MultiTrackPlot = (() => {
       data.tracks.map(async (track) => {
         // The LD "pivot" is the best (lowest-p) point that actually HAS an rsID — not necessarily
         // the track's single most significant point. If the true top hit lacks an rsID (common —
-        // only a fraction of positions resolve one), it can't be LD-fetched or shown at all
-        // (points with no rsID are dropped below), so anchoring purely on it would silently give
-        // up on LD for the whole panel even when plenty of other nearby points do have rsIDs.
+        // only a fraction of positions resolve one), it cannot be LD-fetched, so we use the next
+        // best rsID-bearing point while retaining every point in the plot.
         const pivot = bestByPvalue(track.variants, true);
-        const r2map = pivot ? await fetchLd(data.region.chrom, pivot.rs_id, population) : null;
-        if (!r2map) return track;
+        const ld = pivot ? await fetchLd(data.region.chrom, pivot.rs_id, population) : null;
+        if (!ld?.available) {
+          return {
+            ...track,
+            notice: pivot
+              ? (ld?.error || "LD coloring is unavailable; all variants are shown without LD colors.")
+              : "No variant in this dataset has an rsID; all variants are shown in gray.",
+          };
+        }
         gwasUsedLd = true;
-        // Once LD is available, drop points with no rsID at all (can't be looked up or colored).
-        // Every point that has one is kept and shown, even if the pairwise table has no row for
-        // it with the pivot — the 1000G table only stores pairs with r² >= 0.2 (see ld_r2's
-        // docstring), so "no row" reads as "< 0.2" (r2Color's null-r2 branch), not "no data". A
-        // true "is this rsID even in the 1000G panel" existence check was tried and doesn't scale
-        // (6-10s+ for a realistic panel's candidate count) — see docs/process/status.md.
-        const variants = track.variants
-          .filter((v) => v.rs_id !== null && v.rs_id !== undefined)
-          .map((v) => {
-            const isPivot = v === pivot;
-            const key = String(v.rs_id);
-            const r2 = isPivot ? 1.0 : key in r2map ? r2map[key] : null;
-            return { ...v, is_lead: isPivot, r2, color: r2Color(r2, isPivot) };
-          });
+        // Keep every plotted point. Variants without an rsID cannot be looked up and are shown in
+        // gray; rsID-bearing points absent from the pair table are below the panel's 0.2 floor.
+        const variants = track.variants.map((v) => {
+          const isPivot = v === pivot;
+          const hasRsid = v.rs_id !== null && v.rs_id !== undefined;
+          const key = String(v.rs_id);
+          const r2 = isPivot ? 1.0 : key in ld.r2 ? ld.r2[key] : null;
+          return { ...v, is_lead: isPivot, r2, color: r2Color(r2, isPivot, hasRsid) };
+        });
         return { ...track, variants };
       })
     );
 
     container.innerHTML = "";
-    panels.forEach((track) => renderTrack(container, track, data.region, onPointClick));
+    panels.forEach((track) => renderTrack(container, track, data.region, onPointClick, data.query_variant));
     updateLegend(legendEl);
   }
 
@@ -233,8 +283,12 @@ const MultiTrackPlot = (() => {
       if (track.kind !== "qtl") continue;
       for (const p of track.phenotypes || []) rows.push({ track, p });
     }
+    const statusRows = tracks
+      .filter((track) => track.kind === "qtl" && track.status?.message)
+      .map((track) => `<p class="muted track-status-line"><strong>${track.label}:</strong> ${track.status.message}</p>`)
+      .join("");
     if (!rows.length) {
-      container.innerHTML = "";
+      container.innerHTML = statusRows || "<p class='muted track-status-line'>No QTL phenotype was found for the requested locus.</p>";
       onSelectionChange([]);
       return;
     }
@@ -255,19 +309,18 @@ const MultiTrackPlot = (() => {
       .map(
         ({ track, p }, i) => `
         <tr>
-          <td><input type="checkbox" class="qtl-pheno-checkbox" data-index="${i}"></td>
-          <td>${track.dataset}</td>
-          <td>${track.source_project_id || ""}</td>
-          <td><span class="badge badge-blue">${track.qtl_type}</span></td>
-          <td class="mono muted">${track.population}</td>
-          <td>${track.context}</td>
-          <td class="mono">${p.phenotype_id || ""}</td>
-          <td class="num mono">${p.lead_position != null ? p.lead_position.toLocaleString() : ""}</td>
-          <td class="num">${p.lead_pvalue != null ? (-Math.log10(p.lead_pvalue)).toFixed(2) : ""}</td>
+          <td class="qtl-tight"><input type="checkbox" class="qtl-pheno-checkbox" data-index="${i}"></td>
+          <td class="qtl-tight">${track.dataset}</td>
+          <td class="qtl-tight">${track.source_project_id || ""}</td>
+          <td class="qtl-tight"><span class="badge badge-blue">${track.qtl_type}</span></td>
+          <td class="qtl-tight mono muted">${track.population}</td>
+          <td class="qtl-wide"><div>${track.context}</div></td>
+          <td class="qtl-wide qtl-pheno mono"><div>${p.phenotype_id || ""}</div></td>
         </tr>`
       )
       .join("");
     container.innerHTML = `
+      ${statusRows}
       <div class="card" style="padding:0;overflow:hidden">
         <div style="padding:14px 18px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink)">
           QTL results by phenotype
@@ -277,9 +330,9 @@ const MultiTrackPlot = (() => {
           <table class="data-table">
             <thead>
               <tr>
-                <th></th><th>Dataset</th><th>Source project ID</th><th>QTL type</th><th>Population</th><th>Context</th>
-                <th>Phenotype ID</th><th class="num">Lead position</th>
-                <th class="num">Lead &minus;log&#8321;&#8320;(p)</th>
+                <th class="qtl-tight"></th><th class="qtl-tight">Dataset</th><th class="qtl-tight">Source ID</th>
+                <th class="qtl-tight">QTL type</th><th class="qtl-tight">Population</th><th class="qtl-wide">Context</th>
+                <th class="qtl-wide qtl-pheno">Phenotype ID</th>
               </tr>
             </thead>
             <tbody>${body}</tbody>
@@ -303,9 +356,9 @@ const MultiTrackPlot = (() => {
       );
       if (!resp.ok) return null;
       const payload = await resp.json();
-      return payload.reference_present_in_1000g ? payload.r2 : null;
+      return { available: true, r2: payload.r2 || {} };
     } catch {
-      return null;
+      return { available: false, error: "LD lookup failed; all variants are shown without LD colors." };
     }
   }
 
@@ -317,16 +370,17 @@ const MultiTrackPlot = (() => {
         `/api/locus/qtl-phenotype?dataset_id=${datasetId}&phenotype_id=${encodeURIComponent(phenotypeId)}` +
           `&chrom=${encodeURIComponent(chrom)}&start=${start}&end=${end}`
       );
-      if (!resp.ok) return null;
-      return (await resp.json()).variants;
+      const payload = await resp.json();
+      if (!resp.ok) return { variants: [], error: payload.error || "Association request failed." };
+      return { variants: payload.variants || [], error: payload.status?.message || null };
     } catch {
-      return null;
+      return { variants: [], error: "Association request failed; please try again." };
     }
   }
 
   // Render one locuszoom panel per checked phenotype row, LD-colored where possible (see module
   // comment above).
-  async function renderQtlPanels(container, region, selections, onPointClick, legendEl, population) {
+  async function renderQtlPanels(container, region, selections, onPointClick, legendEl, population, queryVariant) {
     qtlUsedLd = false;
     purgePanels(container);
     if (!selections.length) {
@@ -339,12 +393,23 @@ const MultiTrackPlot = (() => {
     const panels = await Promise.all(
       selections.map(async ({ track, p }) => {
         let variants = track.variants.filter((v) => v.phenotype_id === p.phenotype_id);
+        let fetchError = null;
         const hasAnyRsid = variants.some((v) => v.rs_id !== null && v.rs_id !== undefined);
         if (!hasAnyRsid && track.dataset_id != null) {
           const fetched = await fetchPhenotypeVariants(
             track.dataset_id, p.phenotype_id, region.chrom, region.start, region.end
           );
-          if (fetched) variants = fetched;
+          variants = fetched.variants;
+          fetchError = fetched.error;
+        }
+        if (!variants.length) {
+          return {
+            key: `${track.key}:${p.phenotype_id}`,
+            kind: "qtl",
+            label: `${track.label} — ${p.phenotype_id}`,
+            variants: [],
+            status: { code: "no_data", message: fetchError || "No association variants were found in the displayed window." },
+          };
         }
         // is_lead on the source track is scoped to the WHOLE track's lead (across every matched
         // phenotype), not this one phenotype's — recompute it within just this filtered subset.
@@ -352,39 +417,38 @@ const MultiTrackPlot = (() => {
         // lead when that top hit itself lacks an rsID — see render()'s comment for why falling
         // back to it, rather than giving up on LD, matters.
         const pivot = bestByPvalue(variants, true);
-        const r2map = pivot ? await fetchLd(region.chrom, pivot.rs_id, population) : null;
-        if (r2map) qtlUsedLd = true;
-
-        // Same "no rsID, no point" rule as GWAS's render() — only filter when LD was actually
-        // fetched; with no rsID-bearing variant at all, LD just isn't available for this panel
-        // and every variant still shows in the plain fixed color, marked by the true statistical
-        // lead (unchanged from before).
-        const effectiveLead = r2map ? pivot : bestByPvalue(variants, false);
-        const kept = r2map
-          ? variants.filter((v) => v.rs_id !== null && v.rs_id !== undefined)
-          : variants;
-        const scoped = kept.map((v) => {
+        const ld = pivot ? await fetchLd(region.chrom, pivot.rs_id, population) : null;
+        if (ld?.available) qtlUsedLd = true;
+        const effectiveLead = ld?.available ? pivot : bestByPvalue(variants, false);
+        const scoped = variants.map((v) => {
           const isLead = v === effectiveLead;
+          const hasRsid = v.rs_id !== null && v.rs_id !== undefined;
           const key = String(v.rs_id);
-          const r2 = r2map ? (isLead ? 1.0 : key in r2map ? r2map[key] : null) : null;
+          const r2 = ld?.available ? (isLead ? 1.0 : key in ld.r2 ? ld.r2[key] : null) : null;
           return {
             ...v,
             is_lead: isLead,
             r2,
-            color: r2map ? r2Color(r2, isLead) : null,
+            color: ld?.available ? r2Color(r2, isLead, hasRsid) : null,
           };
         });
+        const notice = !ld?.available
+          ? (pivot
+            ? (ld?.error || "LD coloring is unavailable; all variants are shown without LD colors.")
+            : "No variant in this phenotype has an rsID; all variants are shown in gray.")
+          : null;
         return {
           key: `${track.key}:${p.phenotype_id}`,
           kind: "qtl",
           label: `${track.label} — ${p.phenotype_id}`,
           variants: scoped,
+          notice,
         };
       })
     );
 
     container.innerHTML = "";
-    panels.forEach((panel) => renderTrack(container, panel, region, onPointClick));
+    panels.forEach((panel) => renderTrack(container, panel, region, onPointClick, queryVariant));
     updateLegend(legendEl);
   }
 

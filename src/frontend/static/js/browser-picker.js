@@ -53,19 +53,36 @@ const BrowserPicker = (() => {
     for (const opt of select.options) opt.selected = wanted.has(opt.value);
   }
 
+  // Hide the options of a multi-select whose label doesn't contain `query` (case-insensitive).
+  // Hidden options keep their selected state, so filtering never drops a prior selection.
+  function filterOptions(select, query) {
+    const q = query.trim().toLowerCase();
+    for (const opt of select.options) {
+      opt.hidden = q !== "" && !opt.textContent.toLowerCase().includes(q);
+    }
+  }
+
   // ── QTL row ──────────────────────────────────────────────────────────────
+
+  // Empty and disable one QTL row's Context multi-select and its search box.
+  function resetQtlContexts(row) {
+    const contextSel = row.querySelector('[data-role="context"]');
+    const searchInput = row.querySelector('[data-role="context-search"]');
+    contextSel.innerHTML = "";
+    contextSel.disabled = true;
+    searchInput.value = "";
+    searchInput.disabled = true;
+  }
 
   // Populate one QTL row's source-project dropdown for the chosen dataset and reset descendants.
   async function loadQtlSourceProjects(row, datasetName) {
     const projectSel = row.querySelector('[data-role="source_project_id"]');
     const typeSel = row.querySelector('[data-role="qtl_type"]');
-    const contextSel = row.querySelector('[data-role="context"]');
     typeSel.innerHTML = "";
     typeSel.disabled = true;
-    contextSel.innerHTML = "";
-    contextSel.disabled = true;
+    resetQtlContexts(row);
     if (!datasetName) {
-      fillSelect(projectSel, [], "Source project ID…");
+      fillSelect(projectSel, [], "Select…");
       projectSel.disabled = true;
       return;
     }
@@ -75,7 +92,7 @@ const BrowserPicker = (() => {
     // The user may switch Dataset while the previous request is still in flight. Never let the
     // older response repopulate the row for the newly selected dataset.
     if (row.querySelector('[data-role="dataset"]').value !== datasetName) return;
-    fillSelect(projectSel, projects, "Source project ID…");
+    fillSelect(projectSel, projects, "Select…");
     projectSel.disabled = false;
     // Every currently integrated dataset has one source project. Select that sole value and
     // continue the cascade automatically instead of leaving QTL type/context disabled behind a
@@ -89,11 +106,9 @@ const BrowserPicker = (() => {
   // Populate the QTL-type dropdown for one dataset + source project.
   async function loadQtlTypes(row, datasetName, sourceProjectId) {
     const typeSel = row.querySelector('[data-role="qtl_type"]');
-    const contextSel = row.querySelector('[data-role="context"]');
-    contextSel.innerHTML = "";
-    contextSel.disabled = true;
+    resetQtlContexts(row);
     if (!sourceProjectId) {
-      fillSelect(typeSel, [], "QTL type…");
+      fillSelect(typeSel, [], "Select…");
       typeSel.disabled = true;
       return;
     }
@@ -105,18 +120,16 @@ const BrowserPicker = (() => {
       row.querySelector('[data-role="dataset"]').value !== datasetName ||
       row.querySelector('[data-role="source_project_id"]').value !== sourceProjectId
     ) return;
-    fillSelect(typeSel, types, "QTL type…");
+    fillSelect(typeSel, types, "Select…");
     typeSel.disabled = false;
   }
 
   // Populate one QTL row's "Context" multi-select for the chosen dataset + type.
   async function loadQtlContexts(row, datasetName, sourceProjectId, qtlType) {
     const contextSel = row.querySelector('[data-role="context"]');
-    if (!qtlType) {
-      contextSel.innerHTML = "";
-      contextSel.disabled = true;
-      return;
-    }
+    const searchInput = row.querySelector('[data-role="context-search"]');
+    resetQtlContexts(row);
+    if (!qtlType) return;
     const contexts = await fetchJSON(
       `/api/browser/qtl/contexts?dataset=${encodeURIComponent(datasetName)}` +
         `&source_project_id=${encodeURIComponent(sourceProjectId)}` +
@@ -124,6 +137,7 @@ const BrowserPicker = (() => {
     );
     fillSelect(contextSel, contexts);
     contextSel.disabled = false;
+    searchInput.disabled = false;
   }
 
   // Bind one QTL row's cascading dropdown listeners and its remove button.
@@ -131,6 +145,8 @@ const BrowserPicker = (() => {
     const datasetSel = row.querySelector('[data-role="dataset"]');
     const projectSel = row.querySelector('[data-role="source_project_id"]');
     const typeSel = row.querySelector('[data-role="qtl_type"]');
+    const contextSel = row.querySelector('[data-role="context"]');
+    const searchInput = row.querySelector('[data-role="context-search"]');
     datasetSel.addEventListener("change", () => loadQtlSourceProjects(row, datasetSel.value));
     projectSel.addEventListener("change", () =>
       loadQtlTypes(row, datasetSel.value, projectSel.value)
@@ -138,6 +154,13 @@ const BrowserPicker = (() => {
     typeSel.addEventListener("change", () =>
       loadQtlContexts(row, datasetSel.value, projectSel.value, typeSel.value)
     );
+    searchInput.addEventListener("input", () => filterOptions(contextSel, searchInput.value));
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        searchInput.value = "";
+        filterOptions(contextSel, "");
+      }
+    });
     row.querySelector(".picker-row-remove").addEventListener("click", () => row.remove());
   }
 
@@ -153,7 +176,7 @@ const BrowserPicker = (() => {
 
     const datasetSel = row.querySelector('[data-role="dataset"]');
     const datasets = await fetchJSON("/api/browser/qtl/datasets");
-    fillSelect(datasetSel, datasets, "Dataset…");
+    fillSelect(datasetSel, datasets, "Select…");
 
     if (preset) {
       datasetSel.value = preset.dataset;

@@ -1,13 +1,16 @@
 // Data Browser page: sidebar dataset dropdowns + Run Query orchestration.
 // Run Query fetches /api/locus/multi-track once; GWAS panels render immediately, QTL results
 // render as a checkbox table (see multi-track-plot.js) that the user drives to plot phenotype-
-// specific locuszoom panels. Click-to-pin on a QTL panel point drives the variant comparison
-// table (routers/comparison.py) against /browser/partials/variant-stats.
+// specific locuszoom panels. Click-to-pin on a QTL panel point opens that variant's comparison
+// table on the "Search data" tab (/search-data, routers/comparison.py).
 (() => {
   const $ = (id) => document.getElementById(id);
 
   const locusToggle = $("db-locus-toggle");
   const runBtn = $("db-run");
+  const sidebarEl = $("db-sidebar");
+  const resultsPanelEl = $("db-results-panel");
+  const showResultsBtn = $("db-show-results");
 
   const emptyEl = $("db-empty");
   const plotArea = $("db-plot-area");
@@ -19,8 +22,8 @@
   const qtlPanelsEl = $("db-qtl-panels");
   const qtlLdLegendEl = $("db-qtl-ld-legend");
   const qtlLdPopulationEl = $("db-qtl-ld-population");
+  const queryLegendEl = $("db-query-legend");
   const populationSel = $("db-population");
-  const statsArea = $("db-stats-area");
   const errorEl = $("db-error");
 
   let locusMode = document.querySelector("#db-locus-toggle .active")?.dataset.locusMode || "gene";
@@ -33,10 +36,12 @@
   const MAX_REGION_SPAN = 10_000_000;
   const MAX_DATASETS = 12;
 
-  // Click-to-pin handler for a QTL panel point (see multi-track-plot.js) — loads that position's
-  // cross-dataset comparison table.
+  // Click-to-pin handler for a QTL panel point (see multi-track-plot.js) — opens that position's
+  // per-context table on the Search data tab (routers/search_data.py), limited to this query's
+  // datasets, in a separate browser tab (reused across clicks) so this page's results stay put.
   const onPointClick = (chrom, position) => {
-    loadComparison({ chrom, position, datasets: lastDatasets.join(",") });
+    const params = new URLSearchParams({ chrom, position, datasets: lastDatasets.join(",") });
+    window.open("/search-data?" + params.toString(), "locusview-search-data");
   };
 
   // Toggle which button in a button-group (here, the Gene/Region/Variant locus tabs) has the
@@ -98,13 +103,25 @@
     return null;
   }
 
+  // The left column shows either the picker sidebar or, after a query, the QTL results table in
+  // its place; "Back to select context" / "View QTL results" switch between them. Scroll the
+  // panel back to the top so the back button is visible on arrival.
+  function showResultsPanel(show) {
+    sidebarEl.hidden = show;
+    resultsPanelEl.hidden = !show;
+    (show ? resultsPanelEl : sidebarEl).scrollTop = 0;
+  }
+  $("db-back").addEventListener("click", () => showResultsPanel(false));
+  showResultsBtn.addEventListener("click", () => showResultsPanel(true));
+
   // Show the sidebar's error message and hide the plot/comparison areas.
   function showError(msg) {
+    showResultsBtn.hidden = true;
+    showResultsPanel(false);
     errorEl.textContent = msg;
     errorEl.hidden = false;
     emptyEl.hidden = true;
     plotArea.hidden = true;
-    statsArea.hidden = true;
   }
 
   // Read the active locus tab's input box and validate it into /api/locus/multi-track's params,
@@ -151,7 +168,6 @@
 
     errorEl.hidden = true;
     emptyEl.hidden = true;
-    statsArea.hidden = true;
     plotArea.hidden = false;
     plotTitle.textContent = p.label;
     plotSub.textContent = "";
@@ -159,8 +175,10 @@
     geneLinks.replaceChildren();
     tracksEl.innerHTML = "<p class='muted'>Loading&hellip;</p>";
     qtlTableEl.innerHTML = "";
+    showResultsBtn.hidden = true;
     qtlPanelsEl.innerHTML = "";
     qtlLdLegendEl.hidden = true;
+    queryLegendEl.hidden = true;
     try {
       const resp = await fetch("/api/locus/multi-track?" + params.toString());
       if (!resp.ok) throw new Error((await resp.json()).error || "request failed");
@@ -194,6 +212,7 @@
       }
       lastData = data;
       lastDatasets = datasets;
+      queryLegendEl.hidden = !data.query_variant;
       if (qtlLdPopulationEl) qtlLdPopulationEl.textContent = populationSel.value;
 
       // GWAS plots immediately (LD-colored live via its own lead — see multi-track-plot.js's
@@ -204,11 +223,17 @@
       renderGwas();
       MultiTrackPlot.renderQtlTable(qtlTableEl, data.tracks, (selected) => {
         MultiTrackPlot.renderQtlPanels(
-          qtlPanelsEl, data.region, selected, onPointClick, qtlLdLegendEl, populationSel.value
+          qtlPanelsEl, data.region, selected, onPointClick, qtlLdLegendEl, populationSel.value,
+          data.query_variant
         );
       });
+      // Only swap the sidebar for the table when QTL datasets were queried (GWAS-only queries
+      // have no table to show).
+      const hasQtl = data.tracks.some((t) => t.kind === "qtl");
+      showResultsBtn.hidden = !hasQtl;
+      if (hasQtl) showResultsPanel(true);
     } catch (e) {
-      tracksEl.innerHTML = `<p class="muted">${e.message}</p>`;
+      showError(`The locus request failed: ${e.message || "please try again."}`);
     }
   }
 
@@ -236,22 +261,6 @@
     const checked = qtlTableEl.querySelector(".qtl-pheno-checkbox:checked");
     if (checked) checked.dispatchEvent(new Event("change"));
   });
-
-  // Fetch and render the cross-dataset variant-comparison partial for one (chrom, position).
-  async function loadComparison(extra) {
-    const params = new URLSearchParams(extra);
-    errorEl.hidden = true;
-    emptyEl.hidden = true;
-    statsArea.hidden = false;
-    statsArea.innerHTML = "<p class='muted'>Loading&hellip;</p>";
-    try {
-      const resp = await fetch("/browser/partials/variant-stats?" + params.toString());
-      if (!resp.ok) throw new Error(await resp.text());
-      statsArea.innerHTML = await resp.text();
-    } catch (e) {
-      statsArea.innerHTML = "<p class='muted'>No comparison data available.</p>";
-    }
-  }
 
   runBtn.addEventListener("click", () => {
     runLocusView();

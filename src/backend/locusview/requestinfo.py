@@ -126,6 +126,22 @@ class PhenotypeSummary:
 
 
 @dataclass(frozen=True)
+class PhenotypeLead:
+    """One phenotype's most significant (min-p) variant in one QTL dataset — a gene search's row
+    on the Search data tab (see :meth:`QtlRepository.gene_phenotype_leads`)."""
+
+    phenotype_id: str
+    gene_id: int | None
+    chrom: str
+    position: int
+    ref: str | None
+    alt: str | None
+    rs_id: int | None
+    pvalue: float | None
+    beta: float | None
+
+
+@dataclass(frozen=True)
 class GwasDataset:
     """A GWAS trait/list in the catalog (one per trait x population), keyed by its integer id
     (the ``gwas_snp_{id}`` shard number — same "id = shard number" convention as :class:`Dataset`
@@ -223,6 +239,40 @@ class QtlRepository(Protocol):
 
     def phenotypes_for_gene(self, gene: Gene, dataset_id: int) -> list[PhenotypeSummary]:
         """Return every phenotype matched to a gene, without loading association values."""
+        ...
+
+    def variant_hits(
+        self,
+        chrom: str,
+        position: int,
+        dataset_ids: Sequence[int],
+        max_pvalue: float | None = None,
+    ) -> list[EqtlAssociation]:
+        """Every association at exactly ``chrom:position`` across several QTL datasets, in one
+        round trip (each row's ``dataset_id`` says which) — only those with ``p < max_pvalue``
+        when a threshold is given. Backs the Search data tab's variant
+        search (``routers/search_data.py``)."""
+        ...
+
+    def gwas_variant_hits(
+        self,
+        chrom: str,
+        position: int,
+        dataset_ids: Sequence[int],
+        max_pvalue: float | None = None,
+    ) -> list[GwasAssociation]:
+        """:meth:`variant_hits` for GWAS traits: every association at exactly ``chrom:position``
+        across several GWAS shards in one round trip, ``p < max_pvalue`` when given. Carries only
+        ``pvalue``/``beta`` (``se``/``ref``/``alt``/``rs_id`` are ``None``)."""
+        ...
+
+    def gene_phenotype_leads(
+        self, gene: Gene, dataset_ids: Sequence[int]
+    ) -> list[tuple[int, PhenotypeLead]]:
+        """``(dataset_id, lead)`` for each of the gene's phenotypes (matched as in
+        :meth:`phenotypes_for_gene`) across several QTL datasets: that phenotype's most significant
+        variant, with its rsID where one resolves, in one round trip. Phenotypes with no p-valued
+        association are omitted. Backs the Search data tab's gene search."""
         ...
 
     def associations_for_phenotype(
@@ -525,6 +575,71 @@ class FakeQtlRepository:
             if matched:
                 groups[hit.phenotype_id] = hit.gene_id
         return [PhenotypeSummary(pid, gid, None, None, 0) for pid, gid in groups.items()]
+
+    def variant_hits(
+        self,
+        chrom: str,
+        position: int,
+        dataset_ids: Sequence[int],
+        max_pvalue: float | None = None,
+    ) -> list[EqtlAssociation]:
+        """See :meth:`QtlRepository.variant_hits`."""
+        out: list[EqtlAssociation] = []
+        for dataset_id in dataset_ids:
+            for hit in self.associations_in_region(chrom, position, position, dataset_id):
+                if max_pvalue is None or (hit.pvalue is not None and hit.pvalue < max_pvalue):
+                    out.append(hit)
+        return out
+
+    def gwas_variant_hits(
+        self,
+        chrom: str,
+        position: int,
+        dataset_ids: Sequence[int],
+        max_pvalue: float | None = None,
+    ) -> list[GwasAssociation]:
+        """See :meth:`QtlRepository.gwas_variant_hits`."""
+        return [
+            GwasAssociation(a.dataset_id, a.chrom, a.position, a.pvalue, a.beta, None)
+            for dataset_id in dataset_ids
+            for a in self.gwas_associations_in_region(chrom, position, position, dataset_id)
+            if max_pvalue is None or (a.pvalue is not None and a.pvalue < max_pvalue)
+        ]
+
+    def gene_phenotype_leads(
+        self, gene: Gene, dataset_ids: Sequence[int]
+    ) -> list[tuple[int, PhenotypeLead]]:
+        """See :meth:`QtlRepository.gene_phenotype_leads`."""
+        out: list[tuple[int, PhenotypeLead]] = []
+        for dataset_id in dataset_ids:
+            wanted = {p.phenotype_id for p in self.phenotypes_for_gene(gene, dataset_id)}
+            best: dict[str, EqtlAssociation] = {}
+            for a in self._associations:
+                if a.dataset_id != dataset_id or a.pvalue is None:
+                    continue
+                if a.phenotype_id is None or a.phenotype_id not in wanted:
+                    continue
+                current = best.get(a.phenotype_id)
+                if current is None or (current.pvalue is not None and a.pvalue < current.pvalue):
+                    best[a.phenotype_id] = a
+            out.extend(
+                (
+                    dataset_id,
+                    PhenotypeLead(
+                        pid,
+                        a.gene_id,
+                        str(a.chrom),
+                        a.position,
+                        a.ref,
+                        a.alt,
+                        a.rs_id,
+                        a.pvalue,
+                        a.beta,
+                    ),
+                )
+                for pid, a in best.items()
+            )
+        return out
 
     def associations_for_phenotype(
         self, dataset_id: int, phenotype_id: str, chrom: str, start: int, end: int

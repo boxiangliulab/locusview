@@ -89,6 +89,7 @@ from locusview.requestinfo import (
     Gene,
     GwasAssociation,
     GwasDataset,
+    PhenotypeLead,
     PhenotypeSummary,
     QtlContextEntry,
     RepositoryTimeoutError,
@@ -112,6 +113,14 @@ def _shard_table(qtl_list_id: int) -> str:
 # than genes — the only ones whose ``_phenotype`` companion carries chrom/start/end columns. Every
 # other type resolves its phenotypes through gencode_v39's gene id. See :meth:`_is_peak_dataset`.
 _PEAK_QTL_TYPES = frozenset({"caqtl"})
+
+
+def _gene_key(gene_id: int) -> str:
+    """The text form of a numeric gene id as stored in ``gencode_v39.gene_id_key`` and every
+    phenotype table's ``gene_id``: zero-padded to 6 digits (``ENSG00000012048`` -> ``"012048"``;
+    confirmed live on all 146 phenotype tables, 2026-09). ``str(12048)`` silently matches nothing,
+    which hid every gene numbered below 100000 (e.g. BRCA1)."""
+    return f"{gene_id:06d}"
 
 
 def _phenotype_table(qtl_list_id: int) -> str:
@@ -319,7 +328,7 @@ class PostgresQtlRepository:
         rows = self._query(
             'SELECT gene_id_key, gene_name, gene_id, chr, start, "end", strand '
             "FROM gencode_v39 WHERE gene_id_key = %s LIMIT 1",
-            (str(gene_id),),
+            (_gene_key(gene_id),),
         )
         if not rows:
             return None
@@ -398,8 +407,8 @@ class PostgresQtlRepository:
                     conn,
                     f"SELECT s.chrom, s.position, s.pval, s.beta, s.se, p.gene_id "
                     f"FROM {shard} s JOIN {pheno} p ON p.id = s.phenotype_key "
-                    f"WHERE p.gene_id::bigint = %s LIMIT %s",
-                    (gene_id, limit),
+                    f"WHERE p.gene_id = %s LIMIT %s",
+                    (_gene_key(gene_id), limit),
                 )
                 out.extend(_row_to_eqtl(dataset_id, r) for r in rows)
             return out
@@ -435,7 +444,7 @@ class PostgresQtlRepository:
             key_rows = self._peak_phenotypes(dataset_id, gene.chrom, gene.start, gene.start)
         else:
             key_rows = self._query(
-                f"SELECT id, phenotype_id FROM {pheno} WHERE gene_id = %s", (str(gene_id),)
+                f"SELECT id, phenotype_id FROM {pheno} WHERE gene_id = %s", (_gene_key(gene_id),)
             )
         phenotype_map = {int(r[0]): str(r[1]) for r in key_rows}
         if not phenotype_map:
@@ -515,8 +524,8 @@ class PostgresQtlRepository:
             shard, pheno = _shard_table(dataset.id), _phenotype_table(dataset.id)
             rows = self._query(
                 f"SELECT MIN(s.pval) FROM {shard} s JOIN {pheno} p ON p.id = s.phenotype_key "
-                f"WHERE p.gene_id::bigint = %s",
-                (gene_id,),
+                f"WHERE p.gene_id = %s",
+                (_gene_key(gene_id),),
             )
             min_p = rows[0][0] if rows else None
             if min_p is not None and float(min_p) < p_threshold:
@@ -614,7 +623,7 @@ class PostgresQtlRepository:
             rows = self._query(
                 f"SELECT phenotype_id, gene_id FROM {pheno} WHERE gene_id = %s "
                 "ORDER BY phenotype_id",
-                (str(gene.gene_id),),
+                (_gene_key(gene.gene_id),),
             )
         return [
             PhenotypeSummary(
@@ -623,6 +632,149 @@ class PostgresQtlRepository:
                 lead_position=None,
                 lead_pvalue=None,
                 n=0,
+            )
+            for r in rows
+        ]
+
+    # The two batched lookups below each answer many shards in ONE query (``UNION ALL`` of one
+    # indexed branch per shard). Per-shard calls cost a fresh connection each, and pg8000's
+    # pure-Python handshake holds the GIL, so ~150 of them serialize to ~3-7 s no matter how many
+    # threads issue them (measured live, 2026-09); one statement per batch avoids that entirely.
+
+    def variant_hits(
+        self,
+        chrom: str,
+        position: int,
+        dataset_ids: Sequence[int],
+        max_pvalue: float | None = None,
+    ) -> list[EqtlAssociation]:
+        """See :meth:`QtlRepository.variant_hits` — one ``(chrom, position)`` index seek per
+        shard, joined to its phenotype table for ``phenotype_id``/``gene_id``. The p-value
+        threshold is applied in SQL: a well-studied variant has ~35k rows across all shards, most
+        of them far from significant. Only the columns Search data shows are fetched — no ``se``
+        (always ``None`` on the returned rows)."""
+        if not dataset_ids:
+            return []
+        p_filter = " AND s.pval < %s" if max_pvalue is not None else ""
+        branches = [
+            f"SELECT {int(did)}, s.chrom, s.position, s.pval, s.beta, p.gene_id, p.phenotype_id "
+            f"FROM {_shard_table(did)} s JOIN {_phenotype_table(did)} p ON p.id = s.phenotype_key "
+            f"WHERE s.chrom = %s AND s.position = %s{p_filter}"
+            for did in dataset_ids
+        ]
+        one: tuple[Any, ...] = (chrom, position) + ((max_pvalue,) if max_pvalue is not None else ())
+        params: tuple[Any, ...] = one * len(dataset_ids)
+        rows = self._query(" UNION ALL ".join(branches), params)
+        return [
+            EqtlAssociation(
+                dataset_id=int(r[0]),
+                gene_id=_to_int(r[5]) or 0,
+                rs_id=None,
+                chrom=int(r[1]),
+                position=int(r[2]),
+                pvalue=_to_float(r[3]),
+                beta=_to_float(r[4]),
+                se=None,
+                phenotype_id=str(r[6]) if r[6] is not None else None,
+            )
+            for r in rows
+        ]
+
+    def gwas_variant_hits(
+        self,
+        chrom: str,
+        position: int,
+        dataset_ids: Sequence[int],
+        max_pvalue: float | None = None,
+    ) -> list[GwasAssociation]:
+        """See :meth:`QtlRepository.gwas_variant_hits` — :meth:`variant_hits`' GWAS twin: one
+        ``(chrom, position)`` index seek per trait shard in a single ``UNION ALL``, the threshold
+        in SQL, and only ``pval``/``beta`` fetched. Unlike :meth:`gwas_associations_in_region`
+        (the Data Browser's window lookup) there's no ``variant_rsid_mapping_raw`` join: Search data
+        already knows the variant, and doesn't show ``se``/``ref``/``alt``/rsID per GWAS row."""
+        if not dataset_ids:
+            return []
+        p_filter = " AND s.pval < %s" if max_pvalue is not None else ""
+        branches = [
+            f"SELECT {int(did)}, s.chrom, s.position, s.pval, s.beta "
+            f"FROM {_gwas_shard_table(did)} s "
+            f"WHERE s.chrom = %s AND s.position = %s{p_filter}"
+            for did in dataset_ids
+        ]
+        one: tuple[Any, ...] = (chrom, position) + ((max_pvalue,) if max_pvalue is not None else ())
+        rows = self._query(" UNION ALL ".join(branches), one * len(dataset_ids))
+        return [
+            GwasAssociation(
+                dataset_id=int(r[0]),
+                chrom=int(r[1]),
+                position=int(r[2]),
+                pvalue=_to_float(r[3]),
+                beta=_to_float(r[4]),
+                se=None,
+            )
+            for r in rows
+        ]
+
+    def gene_phenotype_leads(
+        self, gene: Gene, dataset_ids: Sequence[int]
+    ) -> list[tuple[int, PhenotypeLead]]:
+        """See :meth:`QtlRepository.gene_phenotype_leads`. Each shard's branch matches the gene's
+        phenotypes the :meth:`phenotypes_for_gene` way (caQTL: the peak contains the gene start;
+        everything else: ``gene_id``), then takes each phenotype's lead with a ``LATERAL ... ORDER
+        BY pval LIMIT 1`` served straight from the shard's ``(phenotype_key, pval)`` index — ~10 ms
+        per shard (confirmed live) versus ~200 ms for a ``DISTINCT ON`` over every tested variant.
+        The lead's rsID comes from one ``variant_rsid_mapping_raw.variant_id`` index probe per lead
+        (either allele order), the same mapping :meth:`cis_associations` joins.
+        """
+        if not dataset_ids:
+            return []
+        peak_ids = {
+            int(r[0])
+            for r in self._query(
+                "SELECT l.id, d.qtl_type FROM qtl_lists l "
+                "JOIN qtl_datasets d ON d.id = l.qtl_dataset_id WHERE l.id = ANY(%s)",
+                (list(dataset_ids),),
+            )
+            if str(r[1]).strip().lower() in _PEAK_QTL_TYPES
+        }
+        branches: list[str] = []
+        params: list[Any] = []
+        for did in dataset_ids:
+            if did in peak_ids:
+                match = 'p.chrom = %s AND p.start <= %s AND p."end" >= %s'
+                params += [f"chr{gene.chrom}", gene.start, gene.start]
+            else:
+                match = "p.gene_id = %s"
+                params.append(_gene_key(gene.gene_id))
+            branches.append(
+                f"SELECT {int(did)}, p.phenotype_id, p.gene_id, l.chrom, l.position, l.ref, "
+                f"l.alt, r.rsid, l.pval, l.beta "
+                f"FROM {_phenotype_table(did)} p "
+                f"CROSS JOIN LATERAL (SELECT s.chrom, s.position, s.ref, s.alt, s.pval, s.beta "
+                f"FROM {_shard_table(did)} s "
+                f"WHERE s.phenotype_key = p.id AND s.pval IS NOT NULL "
+                f"ORDER BY s.pval LIMIT 1) l "
+                f"LEFT JOIN LATERAL (SELECT v.rsid FROM variant_rsid_mapping_raw v "
+                f"WHERE v.variant_id IN ('chr' || l.chrom || '_' || l.position || '_' || l.ref "
+                f"|| '_' || l.alt, 'chr' || l.chrom || '_' || l.position || '_' || l.alt || '_' "
+                f"|| l.ref) LIMIT 1) r ON true "
+                f"WHERE {match}"
+            )
+        rows = self._query(" UNION ALL ".join(branches), tuple(params))
+        return [
+            (
+                int(r[0]),
+                PhenotypeLead(
+                    phenotype_id=str(r[1]),
+                    gene_id=_to_int(r[2]),
+                    chrom=str(r[3]),
+                    position=int(r[4]),
+                    ref=str(r[5]) if r[5] is not None else None,
+                    alt=str(r[6]) if r[6] is not None else None,
+                    rs_id=int(str(r[7])[2:]) if r[7] else None,  # "rs12345" -> 12345
+                    pvalue=_to_float(r[8]),
+                    beta=_to_float(r[9]),
+                ),
             )
             for r in rows
         ]
@@ -812,6 +964,9 @@ def postgres_connection_factory() -> ConnectionFactory:
             timeout=8,
         )
         conn.run(f"SET search_path TO {settings.db_schema}")
+        # Match the client socket timeout server-side, so a query the client gave up on is
+        # cancelled instead of scanning on (and saturating the disks) after the request is gone.
+        conn.run("SET statement_timeout = '8s'")
         return conn
 
     return _connect
