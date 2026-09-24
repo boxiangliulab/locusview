@@ -4,6 +4,32 @@ Orientation for any Claude Code session (local, cloud, or a teammate's) and for 
 Keep it current. The live "where we are right now" lives in
 [docs/process/status.md](docs/process/status.md).
 
+## Work log — 2026-09-24
+- Restored the local PostgreSQL container after an unexpected shutdown. Docker had failed to mount
+  its data directory at boot; once the mount was available, PostgreSQL completed crash recovery.
+  Both public frontends then returned HTTP 200: locusview on port 33245 and LocusCompare 2 on
+  port 33244.
+- Moved **Search data** ahead of **Data Browser** in the site navigation. Each QTL phenotype in
+  the Search data table now links to Data Browser with its exact `qtl:<dataset_id>` context,
+  gene or variant locus, and URL-encoded phenotype ID. Data Browser runs the linked query on
+  arrival, selects that phenotype, and loads its LocusZoom plot. If the phenotype is outside the
+  initial 50-row summary, the linked row is added so it can still be plotted. GWAS rows have no
+  phenotype link.
+- Deployed the change in the `locusview:search-data-20260924` Docker image. Verified the public
+  Search data and Data Browser pages, a real TP53 phenotype link, and the phenotype-variant API.
+  The full test run had 314 passes and one existing failure in
+  `tests/test_qtl_data_agent.py::test_reads_selected_skill` (its expected skill text differs from
+  the current skill file); coverage was 97.29%. JavaScript syntax and `git diff --check` passed.
+- Updated each Data Browser QTL LocusZoom panel header: the blue badge shows the track's actual
+  `qtl_type` (for example `sQTL`), and the title shows `source_project_id — context — phenotype`.
+  GWAS panel headers are unchanged. Deployed as `locusview:plot-title-20260924`; the public
+  browser and updated JavaScript returned HTTP 200, and live track metadata supplied all three
+  requested fields.
+- Updated the Tutorial to teach the Search data → phenotype link → Data Browser plot path, while
+  retaining instructions for direct region and multi-dataset browsing and the Search data JSON
+  API. All seven Tutorial tests passed; deployed as `locusview:tutorial-20260924` and verified
+  the public `/tutorial` page returns the new content.
+
 ## What this is
 locusview aggregates publicly available **QTL** (quantitative trait locus) data and lets users
 **search, browse, and download** it. It is built by Boxiang Liu's lab **and** is a graduate-level

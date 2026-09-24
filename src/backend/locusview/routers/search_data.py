@@ -115,6 +115,7 @@ class ContextRow:
     type: str
     is_gwas: bool
     hits: list[Hit] = field(default_factory=list)
+    dataset_id: int | None = None
 
     @property
     def best(self) -> Hit | None:
@@ -218,6 +219,7 @@ def _variant_rows(
                         type=qtl_type,
                         is_gwas=False,
                         hits=[Hit(h.phenotype_id, h.pvalue, h.beta) for h in ranked],
+                        dataset_id=dataset_id,
                     )
                 )
             return rows
@@ -292,6 +294,7 @@ def _gene_rows(
                         type=qtl_type,
                         is_gwas=False,
                         hits=[_lead_hit(lead) for lead in ranked],
+                        dataset_id=dataset_id,
                     )
                 )
             return rows

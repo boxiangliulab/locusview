@@ -25,6 +25,7 @@
   const queryLegendEl = $("db-query-legend");
   const populationSel = $("db-population");
   const errorEl = $("db-error");
+  let linkedPhenotype = new URLSearchParams(window.location.search).get("phenotype");
 
   let locusMode = document.querySelector("#db-locus-toggle .active")?.dataset.locusMode || "gene";
   // Set on every successful query so the population-change handler can re-render GWAS panels
@@ -221,17 +222,27 @@
       // a row plots that phenotype's own locuszoom panel below the table, and the user can freely
       // change their selection afterward.
       renderGwas();
+      // Search data links identify one exact context by qtl:<id>. Add its phenotype if the
+      // browser's top-50 summary omitted it, then select that row to fetch and draw its plot.
+      const linkedKey = linkedPhenotype && datasets.length === 1 && datasets[0].startsWith("qtl:")
+        ? datasets[0] : null;
+      const linkedTrack = linkedKey && data.tracks.find((t) => t.key === linkedKey && t.kind === "qtl");
+      if (linkedTrack && Array.isArray(linkedTrack.phenotypes)
+          && !linkedTrack.phenotypes.some((p) => p.phenotype_id === linkedPhenotype)) {
+        linkedTrack.phenotypes.push({ phenotype_id: linkedPhenotype, lead_pvalue: null });
+      }
       MultiTrackPlot.renderQtlTable(qtlTableEl, data.tracks, (selected) => {
         MultiTrackPlot.renderQtlPanels(
           qtlPanelsEl, data.region, selected, onPointClick, qtlLdLegendEl, populationSel.value,
           data.query_variant
         );
-      });
+      }, linkedTrack ? { key: linkedKey, phenotype: linkedPhenotype } : null);
       // Only swap the sidebar for the table when QTL datasets were queried (GWAS-only queries
       // have no table to show).
       const hasQtl = data.tracks.some((t) => t.kind === "qtl");
       showResultsBtn.hidden = !hasQtl;
       if (hasQtl) showResultsPanel(true);
+      linkedPhenotype = null;
     } catch (e) {
       showError(`The locus request failed: ${e.message || "please try again."}`);
     }
@@ -267,4 +278,5 @@
   });
 
   applyLocusModeVisibility();
+  if (linkedPhenotype) runLocusView();
 })();

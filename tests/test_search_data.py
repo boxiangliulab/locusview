@@ -67,7 +67,24 @@ def test_empty_page_shows_search_box_and_examples() -> None:
 
 
 def test_nav_tab_is_marked_active() -> None:
-    assert '<a href="/search-data" class="active">Search data</a>' in _get()
+    html = _get()
+    assert '<a href="/search-data" class="active">Search data</a>' in html
+    assert html.index('href="/search-data"') < html.index('href="/browser"')
+
+
+def test_phenotype_links_target_the_matching_context_and_plot() -> None:
+    gene_html = _get({"q": "TP53", "p": "0.01"})
+    assert (
+        'href="/browser?locus_mode=gene&amp;gene=TP53&amp;datasets=qtl:3&amp;phenotype=clu_1"'
+        in gene_html
+    )
+    variant_html = _get({"q": "rs1042522", "p": "1"})
+    assert (
+        'href="/browser?locus_mode=variant&amp;variant=rs1042522&amp;datasets=qtl:1&amp;phenotype=P_A"'
+        in variant_html
+    )
+    assert 'datasets=qtl:2&amp;phenotype=P_C' in variant_html
+    assert 'datasets=qtl:1&amp;phenotype=P_B' in variant_html
 
 
 def test_rsid_search_lists_every_dataset_with_a_hit_best_first() -> None:

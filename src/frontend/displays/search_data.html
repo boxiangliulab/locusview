@@ -90,7 +90,7 @@
               <td rowspan="{{ n }}">{{ r.dataset }}</td>
               <td rowspan="{{ n }}"><span class="badge {{ 'badge-orange' if r.is_gwas else 'badge-blue' }}">{{ r.type }}</span></td>
               {% endif %}
-              <td class="mono sd-divide sd-pheno">{% if r.is_gwas %}<span class="muted">&mdash;</span>{% else %}{{ h.phenotype_html }}{% endif %}</td>
+              <td class="mono sd-divide sd-pheno">{% if r.is_gwas %}<span class="muted">&mdash;</span>{% else %}<a class="sd-phenotype-link" href="/browser?locus_mode={{ mode }}&amp;{{ 'gene' if mode == 'gene' else 'variant' }}={{ q | urlencode }}&amp;datasets=qtl:{{ r.dataset_id }}&amp;phenotype={{ h.phenotype | urlencode }}" title="Plot this phenotype in Data Browser">{{ h.phenotype_html }}</a>{% endif %}</td>
               {% if mode == "gene" %}
               <td class="mono sd-nowrap">{{ h.snp or "" }}</td>
               <td class="mono muted sd-variant">{{ h.variant or "" }}</td>

@@ -39,6 +39,9 @@ const MultiTrackPlot = (() => {
   const MARKER_SCALE = 1.3;
   const LD_BINS = [[0.2, "#463699"], [0.4, "#26BCE1"], [0.6, "#6EFE68"], [0.8, "#F8C32A"], [1.01, "#DB3D11"]];
   const LD_NO_RSID_COLOR = "#AAAAAA";
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]
+  ));
   let gwasUsedLd = false;
   let qtlUsedLd = false;
 
@@ -150,8 +153,8 @@ const MultiTrackPlot = (() => {
     const status = track.status?.message || (!track.variants?.length ? "No association variants were returned for this dataset." : "");
     panel.innerHTML = `
       <div class="track-panel-header">
-        <span class="track-panel-kind track-panel-kind-${track.kind}">${track.kind.toUpperCase()}</span>
-        <span class="track-panel-label">${track.label}</span>
+        <span class="track-panel-kind track-panel-kind-${track.kind}">${escapeHtml(track.kind === "qtl" ? track.qtl_type || "QTL" : "GWAS")}</span>
+        <span class="track-panel-label">${escapeHtml(track.label)}</span>
         ${track.kind === "qtl" ? "" : '<span class="muted mono track-panel-n">click-to-compare unavailable for GWAS</span>'}
       </div>
       ${track.notice ? `<p class="muted track-panel-status">${track.notice}</p>` : ""}
@@ -277,7 +280,7 @@ const MultiTrackPlot = (() => {
   // ── QTL results table: one checkbox row per (track x phenotype) ────────────────────────────
   // Render the sortable "QTL results by phenotype" checkbox table and wire each row's checkbox
   // to call back with the full currently-checked set.
-  function renderQtlTable(container, tracks, onSelectionChange) {
+  function renderQtlTable(container, tracks, onSelectionChange, initialSelection = null) {
     const rows = [];
     for (const track of tracks) {
       if (track.kind !== "qtl") continue;
@@ -315,7 +318,7 @@ const MultiTrackPlot = (() => {
           <td class="qtl-tight"><span class="badge badge-blue">${track.qtl_type}</span></td>
           <td class="qtl-tight mono muted">${track.population}</td>
           <td class="qtl-wide"><div>${track.context}</div></td>
-          <td class="qtl-wide qtl-pheno mono"><div>${p.phenotype_id || ""}</div></td>
+          <td class="qtl-wide qtl-pheno mono"><div>${escapeHtml(p.phenotype_id || "")}</div></td>
         </tr>`
       )
       .join("");
@@ -343,10 +346,20 @@ const MultiTrackPlot = (() => {
     container.querySelectorAll(".qtl-pheno-checkbox").forEach((cb) => {
       cb.addEventListener("change", () => onSelectionChange(collectSelected()));
     });
-    onSelectionChange([]); // nothing checked yet — caller clears any stale panels
+    const initialIndex = initialSelection && rows.findIndex(
+      ({ track, p }) => track.key === initialSelection.key && p.phenotype_id === initialSelection.phenotype
+    );
+    if (initialIndex !== null && initialIndex >= 0) {
+      container.querySelector(`.qtl-pheno-checkbox[data-index="${initialIndex}"]`).checked = true;
+    }
+    onSelectionChange(collectSelected());
   }
 
   // ── QTL locuszoom panels for the currently-checked phenotype rows, LD-colored when possible ─
+  function qtlPanelLabel(track, phenotype) {
+    return [track.source_project_id || track.dataset, track.context, phenotype].filter(Boolean).join(" — ");
+  }
+
   // Fetch r² of every variant to one lead rsID from /api/ld, or null when the lookup fails or
   // returns no usable LD pairs.
   async function fetchLd(chrom, leadRsId, population) {
@@ -406,7 +419,8 @@ const MultiTrackPlot = (() => {
           return {
             key: `${track.key}:${p.phenotype_id}`,
             kind: "qtl",
-            label: `${track.label} — ${p.phenotype_id}`,
+            qtl_type: track.qtl_type,
+            label: qtlPanelLabel(track, p.phenotype_id),
             variants: [],
             status: { code: "no_data", message: fetchError || "No association variants were found in the displayed window." },
           };
@@ -440,7 +454,8 @@ const MultiTrackPlot = (() => {
         return {
           key: `${track.key}:${p.phenotype_id}`,
           kind: "qtl",
-          label: `${track.label} — ${p.phenotype_id}`,
+          qtl_type: track.qtl_type,
+          label: qtlPanelLabel(track, p.phenotype_id),
           variants: scoped,
           notice,
         };

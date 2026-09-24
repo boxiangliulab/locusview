@@ -41,17 +41,27 @@
 <main class="tutorial-page">
   <h1>Tutorial</h1>
   <p class="tutorial-intro">
-    Use Data Browser to select one or more QTL or GWAS datasets, choose a gene, genomic region,
-    or variant, and run the query. To pull results into a script, see
-    <a href="#request-from-api">Request data from the API</a>. The tables below list the concrete
-    datasets currently available.
+    Start with <a href="/search-data">Search data</a> to find a gene or variant across QTL contexts
+    and GWAS traits. Select a QTL phenotype to open its LocusZoom plot in
+    <a href="/browser">Data Browser</a>. You can also open Data Browser directly to search a region
+    or compare multiple datasets. For scripts, see <a href="#request-from-api">Request data from the API</a>.
   </p>
 
   <div class="tutorial-steps">
-    <div class="tutorial-step"><strong>1. Select datasets</strong><span>Choose QTL contexts, GWAS traits, or both from the cascading selectors.</span></div>
-    <div class="tutorial-step"><strong>2. Enter a locus</strong><span>Search by gene symbol or Ensembl ID, genomic interval, rsID, or chromosome position.</span></div>
-    <div class="tutorial-step"><strong>3. Explore results</strong><span>Compare LocusZoom plots, inspect LD, and click SNPs for cross-dataset p-values.</span></div>
+    <div class="tutorial-step"><strong>1. Search data</strong><span>Enter a gene symbol, Ensembl ID, rsID, or chromosome position. Adjust the p-value threshold if needed.</span></div>
+    <div class="tutorial-step"><strong>2. Choose a phenotype</strong><span>Click a QTL phenotype in the results table. Data Browser opens with its dataset, context, and locus selected.</span></div>
+    <div class="tutorial-step"><strong>3. Explore the plot</strong><span>The selected phenotype's LocusZoom plot loads automatically. Its blue badge shows the QTL type; the title shows source project ID, context, and phenotype.</span></div>
   </div>
+
+  <section class="tutorial-section tutorial-api" id="browse-directly">
+    <h2>Browse a region or compare datasets</h2>
+    <p>
+      In <a href="/browser">Data Browser</a>, select QTL contexts, GWAS traits, or both. Choose
+      Gene, Region, or Variant, enter a locus, and click <strong>Run Query</strong>. GWAS plots appear
+      immediately; check rows in the QTL results table to draw individual phenotype plots. A
+      variant search in Search data includes GWAS results, but GWAS rows have no phenotype link.
+    </p>
+  </section>
 
   <section class="tutorial-section tutorial-api" id="request-from-api">
     <h2>Request data from the API</h2>

@@ -65,6 +65,19 @@ def test_tutorial_explains_requesting_data_from_the_api() -> None:
     assert "404" in html and "400" in html
 
 
+def test_tutorial_explains_search_to_phenotype_plot_and_direct_browsing() -> None:
+    html = _client().get("/tutorial").text
+    assert (
+        html.index("1. Search data")
+        < html.index("2. Choose a phenotype")
+        < html.index("3. Explore the plot")
+    )
+    assert "LocusZoom plot loads automatically" in html
+    assert "source project ID, context, and phenotype" in html
+    assert 'id="browse-directly"' in html
+    assert "GWAS rows have no phenotype link" in html
+
+
 def test_tutorial_dataset_tables_have_no_api_key_column() -> None:
     html = _client().get("/tutorial").text
     assert "API key" not in html
