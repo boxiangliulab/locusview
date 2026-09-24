@@ -1,0 +1,12 @@
+{# Citations list (Home page). Context: citations = [Citation(text, doi)]. #}
+<div class="citation-list">
+  {% for c in citations %}
+  <div class="citation">
+    <div class="citation-index">[{{ loop.index }}]</div>
+    <div>
+      <div class="citation-text">{{ c.text }}</div>
+      <div class="citation-doi mono muted">doi: {{ c.doi }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>

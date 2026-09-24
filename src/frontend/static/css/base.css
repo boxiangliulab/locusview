@@ -1,0 +1,392 @@
+/* Shared design tokens + app shell (header/nav/footer). Palette matches Liu Fei's mockup
+   (docs/design/mockups/LocusView_Standalone_v1.html): blue accent on a slate/white surface. */
+
+:root {
+  --ink: #1e293b;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --line: #e2e8f0;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --lead: #f97316;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+code {
+  background: #f1f5f9;
+  color: #1d4ed8;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+
+/* ── Header / nav (shared by every page) ───────────────────────────────── */
+
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.site-header .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 32px;
+  flex-shrink: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+}
+.site-header .brand span.accent { color: var(--accent); }
+
+.site-nav { display: flex; gap: 2px; flex: 1; }
+.site-nav a {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+}
+.site-nav a:hover { color: var(--ink); text-decoration: none; }
+.site-nav a.active { color: var(--accent); background: var(--accent-soft); }
+
+.site-header .version {
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.site-footer {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.page { min-height: calc(100vh - 56px); }
+
+/* ── Shared component primitives (regional plot, data tables) ─────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.controls { display: flex; gap: 1rem; flex-wrap: wrap; align-items: end; margin-bottom: 0.6rem; }
+.controls label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 2px; }
+select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* LocusZoom canvases use a consistent height:width ratio of 3:8. They remain responsive below
+   800px, but no longer stretch into very wide, shallow plots on large screens. */
+#lv-plot {
+  width: min(100%, 800px); height: auto; aspect-ratio: 8 / 3; margin-inline: auto;
+  transition: opacity 0.15s;
+}
+.legend {
+  display: flex; gap: 0.8rem; flex-wrap: wrap; font-size: 0.78rem; color: var(--muted);
+  margin-top: 0.4rem;
+}
+.swatch {
+  display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px;
+  vertical-align: middle; margin-right: 3px;
+}
+.swatch-diamond { transform: rotate(45deg) scale(0.85); border-radius: 1px; }
+
+table.data-table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.92rem; }
+table.data-table th, table.data-table td {
+  text-align: left; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--line);
+}
+table.data-table th { border-bottom: 2px solid #cbd5e1; }
+table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.variant-stats-pvalue { text-align: center; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+.badge {
+  display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 11px;
+  font-family: var(--mono);
+}
+.badge-blue { background: var(--accent-soft); color: #1d4ed8; }
+.badge-orange { background: #ffedd5; color: #9a3412; }
+
+/* ── Search data tab (search_data.html) ──────────────────────────────────── */
+/* The tab's content lives in one column 80% of the window wide (so it grows as the window is
+   widened), everything in it left-aligned; the results table fills the column. On narrow
+   windows the column takes the full width. */
+.search-data { width: 80%; margin: 0 auto; padding: 36px 0; }
+@media (max-width: 900px) { .search-data { width: auto; padding: 36px 16px; } }
+.search-data .sd-form { max-width: 900px; }
+.search-data h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+.search-data .lede { font-size: 13.5px; margin: 0 0 22px; }
+.sd-form { display: flex; gap: 8px; }
+.sd-input {
+  flex: 1; min-width: 0; padding: 10px 14px; font-size: 15px; border: 1px solid var(--line);
+  border-radius: 8px; font-family: var(--sans); background: var(--surface); color: var(--ink);
+}
+.sd-input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.sd-submit {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0 20px;
+  font-size: 14.5px; font-weight: 600; cursor: pointer; font-family: var(--sans);
+}
+.sd-submit:hover { background: #1d4ed8; }
+.sd-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; }
+.sd-chip {
+  padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 12.5px;
+}
+.sd-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sd-scope { font-size: 13px; margin: 12px 0 0; }
+.sd-message { font-size: 14px; margin: 24px 0 0; }
+.sd-results-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin: 30px 0 12px; }
+.sd-results-head h2 { font-size: 18px; font-weight: 600; margin: 0; }
+.sd-results-head .muted { font-size: 13px; }
+.sd-filter {
+  width: min(100%, 360px); box-sizing: border-box; padding: 7px 10px; font-size: 13.5px;
+  border: 1px solid var(--line); border-radius: 6px; margin: 0 0 10px; font-family: var(--sans);
+  display: block;
+}
+/* Results card "floats" above the page: a soft drop shadow, and a fill a shade darker than the
+   page background (--bg #f8fafc) rather than the usual white card surface. */
+.sd-card {
+  padding: 0; overflow: hidden; width: 100%; background: #f1f5f9;
+  box-shadow: 0 10px 28px -6px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+/* table-layout: fixed makes the <colgroup> widths (search_data.html) exact; long phenotype IDs wrap. */
+.sd-table { width: 100%; table-layout: fixed; }
+.sd-table td { overflow-wrap: anywhere; }
+.sd-table th, .sd-table td { padding: 8px 12px; }
+/* Values that must never break mid-token (rsID, p-value, beta); the variant wraps only at its
+   space, before the alleles. */
+.sd-table td.sd-nowrap { white-space: nowrap; overflow-wrap: normal; }
+.sd-table td.sd-variant { overflow-wrap: normal; }
+.sd-table td.sd-pheno { overflow-wrap: normal; word-break: normal; }
+.sd-phenotype-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.sd-phenotype-link:hover { color: #1d4ed8; }
+.sd-table td { vertical-align: top; }
+.sd-table tbody.sd-group { border-top: 2px solid var(--line); }
+.sd-context { font-weight: 600; }
+/* Header controls (search_data.html script): p-value / beta sort buttons and a drag handle on
+   each header's right edge for resizing columns. */
+.sd-table th { position: relative; }
+.sd-sort {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: inherit;
+}
+.sd-sort:hover { color: var(--accent); }
+.sd-sort:focus-visible { outline: 2px solid var(--accent-soft); border-radius: 3px; }
+.sd-arrow::after { content: "\2195"; opacity: 0.35; font-size: 0.85em; }
+th[aria-sort="ascending"] .sd-arrow::after { content: "\2191"; opacity: 1; }
+th[aria-sort="descending"] .sd-arrow::after { content: "\2193"; opacity: 1; }
+.sd-resize {
+  position: absolute; top: 0; right: -4px; width: 8px; height: 100%; z-index: 1;
+  cursor: col-resize; touch-action: none;
+}
+.sd-resize:hover, .sd-resizing .sd-resize:active { background: var(--accent-soft); }
+.sd-resizing { cursor: col-resize; user-select: none; }
+.sd-strong { font-weight: 600; }
+.sd-divide { border-left: 1px solid var(--line); }
+.sd-table th.sd-num, .sd-table td.sd-num { text-align: center; font-variant-numeric: tabular-nums; }
+.sd-threshold {
+  display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--surface); font-size: 13.5px; color: var(--muted);
+  white-space: nowrap;
+}
+.sd-threshold input {
+  width: 72px; border: none; outline: none; padding: 9px 0; font-size: 14.5px;
+  font-family: var(--mono); background: transparent; color: var(--ink);
+}
+.sd-threshold:focus-within { border-color: var(--accent); }
+@media (max-width: 640px) { .sd-form { flex-wrap: wrap; } .sd-input { flex-basis: 100%; } }
+.sd-api-link { font-size: 13px; margin: 40px 0 0; }
+
+/* ── Data Browser sidebar ──────────────────────────────────────────────── */
+
+.db-layout { flex: 1; display: flex; overflow: hidden; height: calc(100vh - 56px); }
+.db-sidebar {
+  width: 35%; min-width: 360px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--line);
+  overflow-y: auto; overflow-x: hidden; padding: 18px 16px; display: flex; flex-direction: column;
+  gap: 18px;
+}
+.db-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.db-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.db-toggle {
+  display: flex; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 2px; gap: 2px;
+}
+.db-toggle-btn {
+  flex: 1; border: none; background: none; padding: 6px 10px; border-radius: 5px;
+  font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; font-family: var(--sans);
+}
+.db-toggle-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.db-checkbox-empty { font-size: 13px; padding: 4px; margin: 0; }
+
+/* Cascading QTL/GWAS picker (static/js/browser-picker.js) */
+.picker-rows { display: flex; flex-direction: column; gap: 6px; }
+.picker-row {
+  display: flex; align-items: flex-start; gap: 4px; padding: 6px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--bg);
+}
+.picker-select {
+  flex: 1 1 0; min-width: 0; box-sizing: border-box; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 7px; font-size: 13.5px; font-family: var(--sans);
+  background: var(--surface); color: var(--ink);
+}
+.picker-select:disabled { color: var(--faint); background: var(--bg); }
+.picker-select[multiple] { min-height: 120px; align-self: stretch; flex: 1.3 1 0; }
+.picker-select[multiple] option { padding: 3px 4px; }
+/* QTL Context column: a type-to-filter search box stacked above the multi-select. */
+.picker-context { flex: 1.3 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.picker-context .picker-select[multiple] { flex: none; width: 100%; }
+.picker-search {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 7px; font-size: 13.5px; font-family: var(--sans); background: var(--surface);
+  color: var(--ink);
+}
+.picker-search:disabled { background: var(--bg); }
+.picker-row-remove {
+  flex-shrink: 0; border: none; background: none; color: var(--faint); cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.picker-row-remove:hover { background: var(--line); color: var(--ink); }
+/* QTL row: headings (Dataset / Source project ID / QTL type / Context) on the first grid line,
+   their dropdowns directly below; the remove button sits at the end of the dropdown line. */
+.picker-row[data-kind="qtl"] {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2.6fr) auto;
+  column-gap: 4px; row-gap: 3px; align-items: start;
+}
+.picker-col-label {
+  font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.25; align-self: end;
+  overflow-wrap: anywhere;
+}
+.picker-row[data-kind="qtl"] .picker-col-label:nth-child(4) { grid-column: 4 / span 2; }
+.picker-row[data-kind="qtl"] .picker-select { width: 100%; }
+.picker-row[data-kind="qtl"] .picker-row-remove { grid-row: 2; grid-column: 5; }
+.db-add-row-btn {
+  align-self: flex-start; border: 1px dashed var(--line); background: none; color: var(--accent);
+  font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  font-family: var(--sans);
+}
+.db-add-row-btn:hover { background: var(--accent-soft); }
+.db-locus-input input[type="text"] {
+  width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--line); border-radius: 6px;
+  font-family: var(--sans); box-sizing: border-box;
+}
+.db-hint { font-size: 12.5px; color: var(--faint); margin-top: 5px; }
+.db-note {
+  background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 7px; padding: 10px 12px;
+  font-size: 12px; color: #3b82f6; line-height: 1.6;
+}
+.db-run-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 10px 12px;
+  font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 7px; font-family: var(--sans);
+}
+.db-run-btn:hover { background: #1d4ed8; }
+.db-main { flex: 1; overflow-y: auto; padding: 22px 26px; min-width: 0; }
+.db-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;
+  text-align: center; gap: 10px; color: var(--muted);
+}
+.db-plot-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+.db-plot-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.db-plot-header .sub { font-size: 12px; color: var(--faint); margin-top: 4px; font-family: var(--mono); }
+.db-plot-header h2 a { color: var(--ink); text-decoration: none; }
+.db-plot-header h2 a:hover { color: var(--accent); text-decoration: underline; }
+.db-external-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.db-external-links a {
+  padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
+  color: var(--muted); font-size: 10.5px; text-decoration: none;
+}
+.db-external-links a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+/* After Run Query the QTL results-by-phenotype table replaces the sidebar (same width/slot),
+   with a back button to the picker; the locuszoom plots keep the main column. */
+.db-results-panel { gap: 12px; }
+.db-back-btn {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-size: 13.5px; font-weight: 500; padding: 6px 12px;
+  border-radius: 6px; cursor: pointer; font-family: var(--sans);
+}
+.db-back-btn:hover { border-color: var(--accent); color: var(--accent); }
+.db-show-results-btn { align-self: stretch; border-style: solid; }
+/* The table fits the 35%-wide sidebar: the short Dataset / Source ID / QTL type /
+   Population columns shrink to their content (width:1%), wrapping only between words, which leaves
+   the rest of the width to the long Context and Phenotype ID values (Phenotype ID asks for more).
+   Those two wrap anywhere but keep a floor — a whole Ensembl id for Phenotype ID — via their inner
+   <div>'s min-width (table cells ignore min-width themselves); below that the table scrolls. */
+.db-results-panel table.data-table { font-size: 12.5px; margin-top: 0; }
+.db-results-panel table.data-table th, .db-results-panel table.data-table td { padding: 6px 7px; }
+.db-results-panel table.data-table .qtl-tight { width: 1%; }
+.db-results-panel table.data-table .qtl-wide { width: 40%; overflow-wrap: anywhere; }
+.db-results-panel table.data-table .qtl-pheno { width: 60%; }
+.db-results-panel table.data-table td.qtl-wide > div { min-width: 8em; }
+.db-results-panel table.data-table td.qtl-pheno > div { min-width: 18.5ch; }
+
+
+.track-panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  width: min(100%, 830px); box-sizing: border-box; padding: 12px 14px; margin: 0 auto 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.track-panel-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.track-panel-kind {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; font-family: var(--mono);
+  color: #fff;
+}
+.track-panel-kind-qtl { background: #2563eb; }
+.track-panel-kind-gwas { background: #7c3aed; }
+.track-panel-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.track-panel-n { font-size: 11px; margin-left: auto; }
+.track-panel-status { font-size: 11px; margin: 4px 0 8px; line-height: 1.45; }
+.track-status-line { font-size: 11px; margin: 6px 0; line-height: 1.45; }
+.track-panel-plot { width: 100%; height: auto; aspect-ratio: 8 / 3; }
+
+/* ── Per-plot "download as SVG" button (static/js/plot-download.js) ────── */
+/* PlotDownload.attach() wraps each Plotly graph div in .plot-dl-wrap and pins the button to the
+   panel's bottom-right corner — over the x-axis gutter, which is empty there (the axis title is
+   centred), so it never covers data. */
+
+.plot-dl-wrap { position: relative; }
+.plot-dl-btn {
+  position: absolute; right: 6px; bottom: 4px; z-index: 2;
+  border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, 0.9);
+  color: var(--muted); font-family: var(--sans); font-size: 11px; font-weight: 500;
+  padding: 3px 8px; cursor: pointer; line-height: 1.4;
+}
+.plot-dl-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--surface); }
+.plot-dl-btn:disabled { opacity: 0.55; cursor: default; }
+[hidden] { display: none !important; }

@@ -1,0 +1,89 @@
+{# Data Browser sidebar: cascading QTL (Dataset -> Source project ID -> QTL type -> Context) / GWAS (Dataset ->
+   Accession+Trait) picker (static/js/browser-picker.js drives everything live against
+   routers/browser.py's /api/browser/... catalog endpoints), locus mode + input, Run Query.
+   Context: preselected_qtl_rows [{dataset, qtl_type, context_ids}], preselected_gwas_rows
+   [{dataset, option_ids}], has_qtl_datasets, has_gwas_datasets, locus_mode
+   ("gene"|"region"|"variant"), gene, region, variant. #}
+<aside class="db-sidebar" id="db-sidebar">
+  <div class="db-group" id="db-qtl-group">
+    <div class="db-label">QTL</div>
+    {% if has_qtl_datasets %}
+    <div id="qtl-rows" class="picker-rows"></div>
+    <button type="button" id="qtl-add-row" class="db-add-row-btn">+ Add QTL</button>
+    <template id="qtl-row-template">
+      {# Grid: column headings on the first line, their dropdowns directly below (base.css
+         .picker-row[data-kind="qtl"]), so boxes stay aligned even when a heading wraps. #}
+      <div class="picker-row" data-kind="qtl">
+        <span class="picker-col-label" aria-hidden="true">Dataset</span>
+        <span class="picker-col-label" aria-hidden="true">Source project ID</span>
+        <span class="picker-col-label" aria-hidden="true">QTL type</span>
+        <span class="picker-col-label" aria-hidden="true">Context</span>
+        <select class="picker-select" data-role="dataset" aria-label="Dataset"></select>
+        <select class="picker-select" data-role="source_project_id" aria-label="Source project ID" disabled></select>
+        <select class="picker-select" data-role="qtl_type" aria-label="QTL type" disabled></select>
+        <div class="picker-context">
+          <input type="search" class="picker-search" data-role="context-search"
+                 placeholder="Search context…" aria-label="Search contexts" autocomplete="off" disabled>
+          <select class="picker-select" data-role="context" aria-label="Context" multiple disabled></select>
+        </div>
+        <button type="button" class="picker-row-remove" title="Remove this QTL row">&times;</button>
+      </div>
+    </template>
+    {% else %}
+    <p class="muted db-checkbox-empty">No QTL datasets available.</p>
+    {% endif %}
+  </div>
+
+  <div class="db-group" id="db-gwas-group">
+    <div class="db-label">GWAS</div>
+    {% if has_gwas_datasets %}
+    <div id="gwas-rows" class="picker-rows"></div>
+    <button type="button" id="gwas-add-row" class="db-add-row-btn">+ Add GWAS</button>
+    <template id="gwas-row-template">
+      <div class="picker-row" data-kind="gwas">
+        <select class="picker-select" data-role="dataset"></select>
+        <select class="picker-select" data-role="option" multiple disabled></select>
+        <button type="button" class="picker-row-remove" title="Remove this GWAS row">&times;</button>
+      </div>
+    </template>
+    {% else %}
+    <p class="muted db-checkbox-empty">No GWAS datasets available.</p>
+    {% endif %}
+  </div>
+
+  <div class="db-group">
+    <div class="db-label">Locus</div>
+    <div class="db-toggle" id="db-locus-toggle">
+      <button type="button" class="db-toggle-btn {{ 'active' if locus_mode == 'gene' else '' }}" data-locus-mode="gene">Gene</button>
+      <button type="button" class="db-toggle-btn {{ 'active' if locus_mode == 'region' else '' }}" data-locus-mode="region">Region</button>
+      <button type="button" class="db-toggle-btn {{ 'active' if locus_mode == 'variant' else '' }}" data-locus-mode="variant">Variant</button>
+    </div>
+    <div class="db-locus-input" id="db-locus-gene" {{ '' if locus_mode == 'gene' else 'hidden' }}>
+      <input type="text" id="db-gene" placeholder="Gene symbol or Ensembl id, e.g. TP53" value="{{ gene }}">
+    </div>
+    <div class="db-locus-input" id="db-locus-region" {{ '' if locus_mode == 'region' else 'hidden' }}>
+      <input type="text" id="db-region" placeholder="e.g. chr17:7660000-7690000" value="{{ region }}">
+    </div>
+    <div class="db-locus-input" id="db-locus-variant" {{ '' if locus_mode == 'variant' else 'hidden' }}>
+      <input type="text" id="db-variant" placeholder="rsID or chr17:7670000" value="{{ variant }}">
+      <div class="db-hint">Locus View centers +/-1 MB around the variant.</div>
+    </div>
+  </div>
+
+  <div class="db-group">
+    <div class="db-label">LD population</div>
+    <select id="db-population" class="picker-select" style="flex:none;width:100%">
+      {% for p in ["EUR", "AFR", "AMR", "EAS", "SAS"] %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+    </select>
+    <div class="db-hint">1000G phase 3 — used to color QTL and GWAS locuszoom points by LD to each lead.</div>
+  </div>
+
+  <button type="button" id="db-run" class="db-run-btn"><span>&#9654;</span> Run Query</button>
+  {# Shown once a query has results, to get back to them without re-running (browser.js). #}
+  <button type="button" id="db-show-results" class="db-add-row-btn db-show-results-btn" hidden>View QTL results &rarr;</button>
+</aside>
+<script>
+  window.PRESELECTED_QTL_ROWS = {{ preselected_qtl_rows | tojson }};
+  window.PRESELECTED_GWAS_ROWS = {{ preselected_gwas_rows | tojson }};
+</script>
+<script src="{{ asset('js/browser-picker.js') }}"></script>

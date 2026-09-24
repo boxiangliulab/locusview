@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}locusview{% endblock %}</title>
+  <link rel="stylesheet" href="{{ asset('css/base.css') }}" />
+  <!-- HTMX: lets us add interactivity without a JS build chain (ADR-0002). -->
+  <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9.5" stroke="#2563eb" stroke-width="1.5"></circle>
+        <circle cx="12" cy="12" r="2.5" fill="#2563eb"></circle>
+        <line x1="12" y1="2.5" x2="12" y2="7" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round"></line>
+        <line x1="12" y1="17" x2="12" y2="21.5" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round"></line>
+        <line x1="2.5" y1="12" x2="7" y2="12" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round"></line>
+        <line x1="17" y1="12" x2="21.5" y2="12" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round"></line>
+      </svg>
+      Locus<span class="accent">View</span>
+    </div>
+    <nav class="site-nav">
+      <a href="/" class="{{ 'active' if active == 'home' else '' }}">Home</a>
+      <a href="/search-data" class="{{ 'active' if active == 'search_data' else '' }}">Search data</a>
+      <a href="/browser" class="{{ 'active' if active == 'browser' else '' }}">Data Browser</a>
+      <a href="/tutorial" class="{{ 'active' if active == 'tutorial' else '' }}">Tutorial</a>
+      <a href="/news" class="{{ 'active' if active == 'news' else '' }}">News</a>
+    </nav>
+    <span class="version">v{{ version }}</span>
+  </header>
+
+  <div class="page">
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer class="site-footer">
+    locusview v{{ version }} &middot; Phase 1 &middot; data: QTL &amp; GWAS via the shared locuscompare2 database
+  </footer>
+</body>
+</html>

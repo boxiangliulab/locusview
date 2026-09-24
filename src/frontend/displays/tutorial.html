@@ -1,0 +1,155 @@
+{% extends "layout.html" %}
+{% block title %}Tutorial — locusview{% endblock %}
+{% block head %}
+<style>
+  .tutorial-page { max-width: 1180px; margin: 0 auto; padding: 48px 28px 24px; }
+  .tutorial-page h1 { font-size: 30px; letter-spacing: -0.7px; margin: 0 0 10px; }
+  .tutorial-intro { max-width: 780px; color: var(--muted); line-height: 1.7; margin-bottom: 32px; }
+  .tutorial-steps {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 40px;
+  }
+  .tutorial-step { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--surface); }
+  .tutorial-step strong { display: block; color: var(--ink); margin-bottom: 5px; }
+  .tutorial-step span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .tutorial-section { margin-top: 38px; }
+  .tutorial-section h2 { font-size: 20px; margin: 0 0 6px; }
+  .tutorial-section > p { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .tutorial-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .tutorial-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tutorial-table th {
+    position: sticky; top: 0; z-index: 1; padding: 11px 14px; text-align: left;
+    background: var(--bg); color: var(--accent); border-bottom: 1px solid var(--line);
+    font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap;
+  }
+  .tutorial-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+  .tutorial-table tbody tr:last-child td { border-bottom: 0; }
+  .tutorial-table tbody tr:hover { background: #f8fafc; }
+  .tutorial-api { max-width: 900px; }
+  .tutorial-api h3 { font-size: 15px; margin: 22px 0 8px; }
+  .tutorial-api p, .tutorial-api li { color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+  .tutorial-api ul { padding-left: 20px; margin: 0; }
+  .tutorial-api code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
+  .tutorial-api .tutorial-table td { white-space: normal; vertical-align: top; }
+  .tutorial-code {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+    font-size: 12.5px; line-height: 1.55; overflow-x: auto; margin: 0;
+  }
+  @media (max-width: 760px) { .tutorial-steps { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+<main class="tutorial-page">
+  <h1>Tutorial</h1>
+  <p class="tutorial-intro">
+    Start with <a href="/search-data">Search data</a> to find a gene or variant across QTL contexts
+    and GWAS traits. Select a QTL phenotype to open its LocusZoom plot in
+    <a href="/browser">Data Browser</a>. You can also open Data Browser directly to search a region
+    or compare multiple datasets. For scripts, see <a href="#request-from-api">Request data from the API</a>.
+  </p>
+
+  <div class="tutorial-steps">
+    <div class="tutorial-step"><strong>1. Search data</strong><span>Enter a gene symbol, Ensembl ID, rsID, or chromosome position. Adjust the p-value threshold if needed.</span></div>
+    <div class="tutorial-step"><strong>2. Choose a phenotype</strong><span>Click a QTL phenotype in the results table. Data Browser opens with its dataset, context, and locus selected.</span></div>
+    <div class="tutorial-step"><strong>3. Explore the plot</strong><span>The selected phenotype's LocusZoom plot loads automatically. Its blue badge shows the QTL type; the title shows source project ID, context, and phenotype.</span></div>
+  </div>
+
+  <section class="tutorial-section tutorial-api" id="browse-directly">
+    <h2>Browse a region or compare datasets</h2>
+    <p>
+      In <a href="/browser">Data Browser</a>, select QTL contexts, GWAS traits, or both. Choose
+      Gene, Region, or Variant, enter a locus, and click <strong>Run Query</strong>. GWAS plots appear
+      immediately; check rows in the QTL results table to draw individual phenotype plots. A
+      variant search in Search data includes GWAS results, but GWAS rows have no phenotype link.
+    </p>
+  </section>
+
+  <section class="tutorial-section tutorial-api" id="request-from-api">
+    <h2>Request data from the API</h2>
+    <p>
+      Everything the <a href="/search-data">Search data</a> page shows is also available as JSON at
+      <code>/api/search-data</code>, so you can fetch it from Python (or any HTTP client) with the same
+      search terms.
+    </p>
+
+    <h3>Parameters</h3>
+    <div class="tutorial-table-wrap">
+      <table class="tutorial-table">
+        <thead><tr><th>Parameter</th><th>Required</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">q</td><td>yes</td><td>Gene symbol (<code>TP53</code>), Ensembl ID (<code>ENSG00000141510</code>), rsID (<code>rs1042522</code>), or position (<code>chr17:7676154</code>).</td></tr>
+          <tr><td class="mono">p</td><td>no</td><td>p-value threshold: only associations with a p-value below it are returned. Default <code>{{ default_p }}</code>; any number between 0 and 1 (<code>1</code> returns everything).</td></tr>
+          <tr><td class="mono">datasets</td><td>no</td><td>Limit the search to specific datasets, comma-separated, e.g. <code>qtl:1,qtl:5,gwas:1</code>. Default: all datasets.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Example (Python)</h3>
+<pre class="tutorial-code"><code>import requests
+import pandas as pd
+
+base = "<span id="tutorial-origin">https://your-locusview-host</span>"
+r = requests.get(f"{base}/api/search-data", params={"q": "TP53", "p": {{ default_p }}}, timeout=60)
+r.raise_for_status()
+data = r.json()
+
+print(data["type"], data["n_contexts"], "contexts,", data["n_rows"], "rows")
+
+# The same table as the Search data page, row for row
+df = pd.DataFrame(data["rows"])</code></pre>
+    <p>Try it in the browser: <a href="/api/search-data?q=TP53&amp;p={{ default_p }}"><code>/api/search-data?q=TP53&amp;p={{ default_p }}</code></a>
+      &middot; interactive reference: <a href="/docs">/docs</a></p>
+
+    <h3>Response</h3>
+    <ul>
+      <li><code>type</code> is <code>"gene"</code> or <code>"variant"</code>; <code>gene</code> / <code>variant</code> describe what was resolved (symbol, Ensembl ID and coordinates, or chromosome, position and rsID).</li>
+      <li><code>datasets_searched</code> and <code>datasets_failed</code> (could not be searched in time — retrying usually works) summarize the search.</li>
+      <li><code>rows</code> is exactly the table on the <a href="/search-data">Search data</a> page — same rows, same order, same columns:
+        gene searches <code>context</code>, <code>dataset</code>, <code>type</code>, <code>phenotype</code>, <code>lead_snp</code>, <code>variant</code>, <code>pvalue</code>, <code>beta</code>;
+        variant searches <code>context</code>, <code>dataset</code>, <code>type</code>, <code>phenotype</code>, <code>pvalue</code>, <code>beta</code>
+        (<code>phenotype</code> is <code>null</code> for GWAS rows). p-values and β come back at full precision; the page only rounds them for display.</li>
+      <li><code>n_contexts</code> and <code>n_rows</code> count the contexts and table rows.</li>
+      <li>Gene searches cover QTL only (GWAS has no gene concept); variant searches cover QTL and GWAS.</li>
+      <li>Errors return <code>{"query": ..., "error": ...}</code> with status <code>400</code> (missing <code>q</code>, invalid <code>p</code>, unrecognized input, or a region — use the Data Browser for regions) or <code>404</code> (unknown gene or rsID).</li>
+    </ul>
+    <script>
+      // Fill in the address this page was actually reached at (works behind proxies/tunnels).
+      document.getElementById("tutorial-origin").textContent = location.origin;
+    </script>
+  </section>
+
+  <section class="tutorial-section">
+    <h2>GWAS datasets</h2>
+    <p>{{ gwas_rows|length }} dataset{{ '' if gwas_rows|length == 1 else 's' }} currently available.</p>
+    {% if gwas_rows %}
+    <div class="tutorial-table-wrap">
+      <table class="tutorial-table" id="tutorial-gwas-table">
+        <thead><tr><th>Datasource</th><th>Accession ID</th><th>Trait ID</th><th>Population</th></tr></thead>
+        <tbody>{% for row in gwas_rows %}<tr>
+          <td>{{ row.datasource }}</td><td class="mono">{{ row.accession_id }}</td>
+          <td>{{ row.trait_id }}</td><td class="mono">{{ row.population }}</td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p>No GWAS datasets configured.</p>{% endif %}
+  </section>
+
+  <section class="tutorial-section">
+    <h2>QTL datasets</h2>
+    <p>{{ qtl_rows|length }} QTL list{{ '' if qtl_rows|length == 1 else 's' }} currently available.</p>
+    {% if qtl_rows %}
+    <div class="tutorial-table-wrap">
+      <table class="tutorial-table" id="tutorial-qtl-table">
+        <thead><tr>
+          <th>Dataset</th><th>Source project ID</th><th>QTL type</th><th>Population</th><th>Context</th>
+        </tr></thead>
+        <tbody>{% for row in qtl_rows %}<tr>
+          <td>{{ row.dataset }}</td><td class="mono">{{ row.source_project_id }}</td>
+          <td><span class="badge badge-blue">{{ row.qtl_type }}</span></td>
+          <td class="mono">{{ row.population }}</td><td>{{ row.context }}</td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p>No QTL datasets configured.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

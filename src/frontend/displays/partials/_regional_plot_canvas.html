@@ -1,0 +1,24 @@
+{# The plot canvas + legend + caveat only (no tissue/population controls) — shared by
+   partials/_regional_plot.html (gene page, owns its own controls) and browser.html (controls
+   live in the sidebar instead). Loads Plotly + regional-plot.js exactly once per page. #}
+<div id="lv-plot"><p class="muted">Loading&hellip;</p></div>
+<div class="legend">
+  <span><span class="swatch" style="background:#f97316"></span>lead (click any point to re-pick)</span>
+  <span data-ld-context><span class="swatch" style="background:#DB3D11"></span>0.8&ndash;1.0</span>
+  <span data-ld-context><span class="swatch" style="background:#F8C32A"></span>0.6&ndash;0.8</span>
+  <span data-ld-context><span class="swatch" style="background:#6EFE68"></span>0.4&ndash;0.6</span>
+  <span data-ld-context><span class="swatch" style="background:#26BCE1"></span>0.2&ndash;0.4</span>
+  <span data-ld-context><span class="swatch" style="background:#463699"></span>&lt;&nbsp;0.2 / not in panel</span>
+  <span data-ld-context><span class="swatch" style="background:#AAAAAA"></span>no rsID</span>
+  <span data-no-ld-context hidden class="muted">LD unavailable; showing uncolored associations</span>
+</div>
+<p data-ld-context class="muted" style="font-size:0.78rem;margin-top:0.5rem">
+  LD = 1000G phase 3 (selected population) &mdash; a single-population approximation and a visual
+  aid to locus structure, not part of the association inference. The panel stores only
+  <strong>r&sup2;&nbsp;&ge;&nbsp;0.2</strong>, so points drawn as &ldquo;&lt;&nbsp;0.2&rdquo; also
+  absorb any variant absent from the panel. The dotted line is genome-wide significance
+  (5&times;10<sup>&minus;8</sup>).
+</p>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<script src="{{ asset('js/plot-download.js') }}"></script>
+<script src="{{ asset('js/regional-plot.js') }}"></script>
