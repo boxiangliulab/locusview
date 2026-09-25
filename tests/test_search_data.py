@@ -440,12 +440,10 @@ def test_table_columns_match_between_gene_and_variant_tables() -> None:
     var_card, var = layout(_get({"q": "rs1042522", "p": "1"}))
     assert len(gene) == 8 and len(var) == 6  # variant: no Lead SNP / Variant columns
     assert abs(sum(gene) - 100) < 0.1 and abs(sum(var) - 100) < 0.1
-    assert gene_card == 100 and var_card == 76
-    # Shared columns get the same absolute width in both tables (% of card x card width).
-    shared_gene = [gene[i] for i in (0, 1, 2, 3, 6, 7)]
-    for g, v in zip(shared_gene, var, strict=True):
-        assert abs(g - v * var_card / 100) < 0.05, (shared_gene, var)
-    assert gene[3] == 27  # Phenotype: 1.5x its original 18%
+    assert gene_card == var_card == 100
+    # Shared columns retain their widths; Phenotype gets the space from the two missing columns.
+    assert [gene[i] for i in (0, 1, 2, 6, 7)] == [var[i] for i in (0, 1, 2, 4, 5)]
+    assert gene[3] == 27 and var[3] == 51
 
 
 def test_phenotype_ids_wrap_at_colons_and_stay_escaped() -> None:

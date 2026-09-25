@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Made variant Search data results span the same full content width as gene results. The missing
+  Lead SNP and Variant column space now goes to Phenotype, while other shared columns keep their widths.
+  All 33 Search data tests passed; deployed `locusview:search-width-20260925` and confirmed public
+  TP53 and rs1042522 result cards are both 100% wide.
 - Set the shared Home, Search data, Tutorial, and News content column to 70% on wide screens;
   it expands smoothly toward the available width on narrow screens, keeping 16px side margins.
   The Home body map's side panel now stacks within the column on small screens. All 31 focused

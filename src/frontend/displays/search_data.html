@@ -52,11 +52,9 @@
     {% endif %}
     {% if rows %}
     <input type="search" class="sd-filter" id="sd-filter" placeholder="Filter by context, dataset, type, phenotype, or SNP…" aria-label="Filter results">
-    {# Column shares, in % of the gene table's width. Both modes use the same share for the columns
-       they have in common (Context, Dataset, Type, Phenotype, p-value, beta); the variant table
-       lacks Lead SNP + Variant, so its card is just that much narrower (76%) instead of handing
-       the spare width to Phenotype. Columns can also be dragged wider (script below). #}
-    {% set shares = [13, 12, 8, 27, 10, 14, 9, 7] if mode == "gene" else [13, 12, 8, 27, 9, 7] %}
+    {# Both result cards fill the same content width. Variant results have no Lead SNP or Variant
+       columns, so Phenotype uses that spare width. Columns can still be dragged wider below. #}
+    {% set shares = [13, 12, 8, 27, 10, 14, 9, 7] if mode == "gene" else [13, 12, 8, 51, 9, 7] %}
     {% set total = shares | sum %}
     <div class="card sd-card" style="width:{{ total }}%">
       <div class="table-wrap">
