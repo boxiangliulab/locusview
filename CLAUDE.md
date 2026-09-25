@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Deepened the Home hero's blue background above the divider and centered its content vertically
+  while keeping the heading, description, and statistics left-aligned within the page column.
+  All 21 Home tests passed; deployed `locusview:hero-20260925` and verified the public Home page.
 - Enlarged the page titles on Home, Search data, Tutorial, and News. The Home heading now reads
   "LocusView：Explore QTL associations across cell types and tissues" on one line at desktop
   widths. Increased spacing, padding, type size, border emphasis, and shadow on its four live

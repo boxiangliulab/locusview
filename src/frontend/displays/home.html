@@ -3,17 +3,17 @@
 {% block head %}
 <style>
   .hero {
-    background: linear-gradient(160deg, #eff6ff 0%, #f8fafc 100%);
+    background: linear-gradient(160deg, #dbeafe 0%, #e8f1ff 55%, #eff6ff 100%);
     border-bottom: 1px solid var(--line);
-    padding: 56px 0 48px;
+    min-height: 400px; display: flex; align-items: center; padding: 48px 0;
   }
-  .hero-inner { width: var(--page-content-width); margin: 0 auto; }
+  .hero-inner { width: var(--page-content-width); margin: 0 auto; text-align: left; }
   .hero h1 {
     font-size: clamp(28px, 2.45vw, 44px); font-weight: 700; letter-spacing: -2.8px;
     line-height: 1.2; margin: 0 0 22px; white-space: nowrap;
   }
   .hero h1 .accent { color: var(--accent); }
-  .hero p.lede { font-size: 16px; color: var(--muted); max-width: 620px; line-height: 1.75; margin-bottom: 32px; }
+  .hero p.lede { font-size: 16px; color: #475569; max-width: 620px; line-height: 1.75; margin-bottom: 32px; }
   .hero-stats { display: flex; gap: 24px; flex-wrap: wrap; }
   .stat-card {
     min-width: 172px; background: linear-gradient(145deg, #ffffff, #eff6ff);
