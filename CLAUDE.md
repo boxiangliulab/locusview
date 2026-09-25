@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Added subtle downward text shadows to the header brand, Home heading, and the values and labels
+  in all four Home statistics cards. All 21 Home tests passed; deployed
+  `locusview:text-shadow-20260925` and verified the public styles.
 - Removed the text glow from the header brand and Home heading while retaining their spacing
   and high-contrast colors. Deployed `locusview:no-glow-20260925` and verified both public styles.
 - Loosened letter spacing on the LocusView brand and Home heading, added a subtle text glow, and
