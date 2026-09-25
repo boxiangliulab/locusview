@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Changed the shared navigation and Home hero backgrounds to `#072684`, with coordinated nav
+  hover/active backgrounds and divider lines. Text and content-link colors remain as configured.
+  All 21 Home tests passed; deployed `locusview:blue-bg-20260925` and verified four public pages.
 - Expanded the Home introduction to explain cross-context QTL/GWAS exploration, LocusZoom plots,
   and API use; strengthened its heading's downward shadow. Set content links to `#4750DD` while
   keeping high-contrast navigation links light on the navy header. All 83 focused tests passed;

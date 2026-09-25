@@ -45,8 +45,8 @@ code {
 /* ── Header / nav (shared by every page) ───────────────────────────────── */
 
 .site-header {
-  background: #212161;
-  border-bottom: 1px solid #3f3f86;
+  background: #072684;
+  border-bottom: 1px solid #3154a6;
   height: 56px;
   display: flex;
   align-items: center;
@@ -92,8 +92,8 @@ code {
   color: #d8dcf4;
   text-decoration: none;
 }
-.site-nav a:hover { color: #fff; background: #35357e; text-decoration: none; }
-.site-nav a.active { color: #fff; background: #45459a; }
+.site-nav a:hover { color: #fff; background: #17419b; text-decoration: none; }
+.site-nav a.active { color: #fff; background: #2852a8; }
 
 .site-header .version {
   position: absolute;
