@@ -8,8 +8,8 @@
   --line: #e2e8f0;
   --bg: #f8fafc;
   --surface: #ffffff;
-  --accent: #072684;
-  --accent-soft: #dbeafe;
+  --accent: #015a84;
+  --accent-soft: #e0f1f4;
   --link: #4750dd;
   --lead: #f97316;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -45,8 +45,8 @@ code {
 /* ── Header / nav (shared by every page) ───────────────────────────────── */
 
 .site-header {
-  background: #072684;
-  border-bottom: 1px solid #3154a6;
+  background: var(--accent);
+  border-bottom: 1px solid #4489a8;
   height: 56px;
   display: flex;
   align-items: center;
@@ -92,8 +92,8 @@ code {
   color: #d8dcf4;
   text-decoration: none;
 }
-.site-nav a:hover { color: #fff; background: #17419b; text-decoration: none; }
-.site-nav a.active { color: #fff; background: #2852a8; }
+.site-nav a:hover { color: #fff; background: rgba(255, 255, 255, 0.11); text-decoration: none; }
+.site-nav a.active { color: #fff; background: rgba(255, 255, 255, 0.18); }
 
 .site-header .version {
   position: absolute;
@@ -190,7 +190,7 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
   background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0 20px;
   font-size: 14.5px; font-weight: 600; cursor: pointer; font-family: var(--sans);
 }
-.sd-submit:hover { background: #17419b; }
+.sd-submit:hover { filter: brightness(1.12); }
 .sd-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; }
 .sd-chip {
   padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
@@ -334,7 +334,7 @@ th[aria-sort="descending"] .sd-arrow::after { content: "\2193"; opacity: 1; }
 }
 .db-hint { font-size: 12.5px; color: var(--faint); margin-top: 5px; }
 .db-note {
-  background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 7px; padding: 10px 12px;
+  background: var(--accent-soft); border: 1px solid #a8d2db; border-radius: 7px; padding: 10px 12px;
   font-size: 12px; color: var(--accent); line-height: 1.6;
 }
 .db-run-btn {
@@ -342,7 +342,7 @@ th[aria-sort="descending"] .sd-arrow::after { content: "\2193"; opacity: 1; }
   font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center;
   justify-content: center; gap: 7px; font-family: var(--sans);
 }
-.db-run-btn:hover { background: #17419b; }
+.db-run-btn:hover { filter: brightness(1.12); }
 .db-main { flex: 1; overflow-y: auto; padding: 22px 26px; min-width: 0; }
 .db-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;

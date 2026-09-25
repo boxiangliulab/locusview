@@ -31,6 +31,11 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Replaced the earlier navy blue UI theme with `#015A84` on the navigation, Home hero,
+  action buttons, QTL badges, available body-map tissues, and QTL plot tracks. Shifted pale
+  blue surfaces and borders to matching soft teal while retaining `#4750DD` content links.
+  All 83 focused page tests and both plot-script syntax checks passed; deployed
+  `locusview:teal-20260925` and verified the public Home, Search data, and Data browser pages.
 - Standardized visible page labels and headings to sentence case while retaining product names
   and scientific acronyms. Set the Home heading's LocusView text to `#F1EDEA`.
   Replaced the GTEx citation with the verified LocusCompare (2019) and LocusCompare2 (2025)

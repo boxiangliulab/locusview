@@ -5,7 +5,7 @@
 // (Data Browser, region/variant modes) — see routers/locus.py.
 const LocusPlot = (() => {
   const LD_BINS = [[0.2, "#463699"], [0.4, "#26BCE1"], [0.6, "#6EFE68"], [0.8, "#F8C32A"], [1.01, "#DB3D11"]];
-  const LEAD_COLOR = "#f97316", TRACK_COLOR = "#072684", NO_RSID_COLOR = "#AAAAAA";
+  const LEAD_COLOR = "#f97316", TRACK_COLOR = "#015a84", NO_RSID_COLOR = "#AAAAAA";
 
   // Map an r² value (or lack of one) to its LocusZoom-style dot color.
   // The 1000G panel stores only r² >= 0.2, so a missing r² means "below the floor", not "no data".
