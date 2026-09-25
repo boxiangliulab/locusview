@@ -14,7 +14,9 @@ one, 2026-08 — see ``requestinfo.py``'s module docstring and ``docs/process/st
 - ``qtl_snp_{id}`` — the association shard: ``(id, chrom, position, ref, alt, beta, se, pval,
   phenotype_key, maf)``. Indexed on ``(chrom, position)`` and ``(phenotype_key, pval)`` — unlike
   the old MySQL shards, region-mode queries don't need a timeout hint here.
-- ``qtl_snp_{id}_phenotype`` — ``(id, phenotype_id, gene_id)``. For **eQTL/sQTL-style** datasets
+- ``qtl_snp_{id}_phenotype`` — ``(id, phenotype_id, gene_id[, median_tpm])``. The optional
+  ``median_tpm`` column is present on newer eQTL-Catalogue shards; older shards lack it, so
+  Search data reads it through JSONB for both layouts. For **eQTL/sQTL-style** datasets
   ``gene_id`` is the truncated numeric Ensembl id (e.g. ``"287265"``), one row per (usually)
   several phenotypes per gene. For **caQTL-style** datasets (e.g. CIMA) ``gene_id`` is ``NULL`` on
   *every* row instead — phenotypes there are chromatin peaks, not genes, and ``phenotype_id`` is
@@ -688,7 +690,8 @@ class PostgresQtlRepository:
             return []
         p_filter = " AND s.pval < %s" if max_pvalue is not None else ""
         branches = [
-            f"SELECT {int(did)}, s.chrom, s.position, s.pval, s.beta, p.gene_id, p.phenotype_id "
+            f"SELECT {int(did)}, s.chrom, s.position, s.pval, s.beta, p.gene_id, p.phenotype_id, "
+            "to_jsonb(p)->>'median_tpm' "
             f"FROM {_shard_table(did)} s JOIN {_phenotype_table(did)} p ON p.id = s.phenotype_key "
             f"WHERE s.chrom = %s AND s.position = %s{p_filter}"
             for did in dataset_ids
@@ -707,6 +710,7 @@ class PostgresQtlRepository:
                 beta=_to_float(r[4]),
                 se=None,
                 phenotype_id=str(r[6]) if r[6] is not None else None,
+                median_tpm=_to_float(r[7]),
             )
             for r in rows
         ]
@@ -779,7 +783,7 @@ class PostgresQtlRepository:
                 params.append(_gene_key(gene.gene_id))
             branches.append(
                 f"SELECT {int(did)}, p.phenotype_id, p.gene_id, l.chrom, l.position, l.ref, "
-                f"l.alt, r.rsid, l.pval, l.beta "
+                f"l.alt, r.rsid, l.pval, l.beta, to_jsonb(p)->>'median_tpm' "
                 f"FROM {_phenotype_table(did)} p "
                 f"CROSS JOIN LATERAL (SELECT s.chrom, s.position, s.ref, s.alt, s.pval, s.beta "
                 f"FROM {_shard_table(did)} s "
@@ -805,6 +809,7 @@ class PostgresQtlRepository:
                     rs_id=int(str(r[7])[2:]) if r[7] else None,  # "rs12345" -> 12345
                     pvalue=_to_float(r[8]),
                     beta=_to_float(r[9]),
+                    median_tpm=_to_float(r[10]),
                 ),
             )
             for r in rows

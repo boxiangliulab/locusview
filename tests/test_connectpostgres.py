@@ -708,9 +708,10 @@ def test_variant_hits_answers_every_shard_in_one_union_query() -> None:
         assert "FROM qtl_snp_7 s JOIN qtl_snp_7_phenotype p" in sql
         assert params == ("17", 7_676_154, "17", 7_676_154)
         assert "s.se" not in sql  # Search data doesn't show standard errors
+        assert sql.count("to_jsonb(p)->>'median_tpm'") == 2
         return [
-            (1, "17", 7_676_154, 1e-9, 0.5, "141510", "ENSG00000141510.18"),
-            (7, "17", 7_676_154, 0.2, 0.1, None, "chr17_7670000_7680000"),
+            (1, "17", 7_676_154, 1e-9, 0.5, "141510", "ENSG00000141510.18", "12.5"),
+            (7, "17", 7_676_154, 0.2, 0.1, None, "chr17_7670000_7680000", None),
         ]
 
     factory, log = _routing_factory(responder)
@@ -719,6 +720,7 @@ def test_variant_hits_answers_every_shard_in_one_union_query() -> None:
         (1, 141510, 1e-9, 0.5, None, "ENSG00000141510.18"),
         (7, 0, 0.2, 0.1, None, "chr17_7670000_7680000"),
     ]
+    assert [h.median_tpm for h in hits] == [12.5, None]
     assert len(log) == 1
 
 
@@ -747,6 +749,7 @@ def test_gene_phenotype_leads_matches_peaks_or_gene_id_per_shard_in_one_query() 
         assert sql.count(" UNION ALL ") == 1 and sql.count("CROSS JOIN LATERAL") == 2
         assert "ORDER BY s.pval LIMIT 1" in sql and "variant_rsid_mapping_raw" in sql
         assert "s.se" not in sql  # the gene search doesn't show standard errors
+        assert sql.count("to_jsonb(p)->>'median_tpm'") == 2
         # eQTL shard 1 matches the zero-padded gene_id; caQTL shard 3 the peak containing the start.
         assert params == ("012048", "chr17", 43_044_295, 43_044_295)
         return [
@@ -761,6 +764,7 @@ def test_gene_phenotype_leads_matches_peaks_or_gene_id_per_shard_in_one_query() 
                 "rs8176318",
                 1e-6,
                 0.4,
+                "0",
             ),
             (
                 3,
@@ -772,6 +776,7 @@ def test_gene_phenotype_leads_matches_peaks_or_gene_id_per_shard_in_one_query() 
                 None,
                 None,
                 "0.01",
+                None,
                 None,
             ),
         ]
@@ -786,6 +791,7 @@ def test_gene_phenotype_leads_matches_peaks_or_gene_id_per_shard_in_one_query() 
         (1, "ENSG00000012048.23", 12048, 43_050_000, "C", 8176318, 1e-6, 0.4),
         (3, "chr17_43040000_43046000", None, 43_044_000, None, None, 0.01, None),
     ]
+    assert [lead.median_tpm for _, lead in leads] == [0.0, None]
 
 
 def test_batched_lookups_with_no_datasets_skip_the_query() -> None:

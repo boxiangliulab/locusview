@@ -103,10 +103,10 @@ df = pd.DataFrame(data["rows"])</code></pre>
     <ul>
       <li><code>type</code> is <code>"gene"</code> or <code>"variant"</code>; <code>gene</code> / <code>variant</code> describe what was resolved (symbol, Ensembl ID and coordinates, or chromosome, position and rsID).</li>
       <li><code>datasets_searched</code> and <code>datasets_failed</code> (could not be searched in time — retrying usually works) summarize the search.</li>
-      <li><code>rows</code> is exactly the table on the <a href="/search-data">Search data</a> page — same rows, same order, same columns:
+      <li><code>rows</code> follows the table on the <a href="/search-data">Search data</a> page — same rows and order:
         gene searches <code>context</code>, <code>dataset</code>, <code>type</code>, <code>phenotype</code>, <code>lead_snp</code>, <code>variant</code>, <code>pvalue</code>, <code>beta</code>;
         variant searches <code>context</code>, <code>dataset</code>, <code>type</code>, <code>phenotype</code>, <code>pvalue</code>, <code>beta</code>
-        (<code>phenotype</code> is <code>null</code> for GWAS rows). p-values and β come back at full precision; the page only rounds them for display.</li>
+        (<code>phenotype</code> is <code>null</code> for GWAS rows). QTL rows also include <code>median_tpm</code> when that phenotype has a stored value; the field is omitted otherwise. p-values, β, and median TPM come back at full precision; the page only rounds p-values and β for display.</li>
       <li><code>n_contexts</code> and <code>n_rows</code> count the contexts and table rows.</li>
       <li>Gene searches cover QTL only (GWAS has no gene concept); variant searches cover QTL and GWAS.</li>
       <li>Errors return <code>{"query": ..., "error": ...}</code> with status <code>400</code> (missing <code>q</code>, invalid <code>p</code>, unrecognized input, or a region — use the Data browser for regions) or <code>404</code> (unknown gene or rsID).</li>

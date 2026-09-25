@@ -31,6 +31,14 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Added optional `median_tpm` to `/api/search-data` QTL phenotype rows for gene and variant
+  searches. The value comes from the phenotype companion table; a stored zero is included,
+  and the key is omitted when the value or column is absent. The live database currently has
+  64 phenotype tables with the column out of 167 total, so the query handles both layouts.
+  All 98 focused tests, Ruff, and mypy passed. Deployed `locusview:median-tpm-api-20260925`;
+  public gene and variant API queries for qtl:154 both returned `median_tpm: 183.989`, while a
+  qtl:1 query without the column succeeded and omitted the key.
+  The full test run had 317 passes and the existing `test_reads_selected_skill` assertion failure.
 - Matched content-link text to the `#015A84` theme color across Home, Search data,
   Data browser, Tutorial, and News. Navigation links stay light against the teal header.
   Deployed `locusview:teal-links-20260925` and verified the public stylesheet and Home page.

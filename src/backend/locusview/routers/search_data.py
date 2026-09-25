@@ -17,8 +17,8 @@ searched: QTL shards in batches of ``_BATCH`` per query, run on a small thread p
 Browser's click-to-pin opens the page with ``chrom``/``position`` and its own ``datasets``.
 
 ``/search-data`` renders the page; ``/api/search-data`` returns the same search as JSON for
-scripted access, e.g. Python ``requests`` — its ``rows`` are the page's table, row for row and
-column for column (:func:`_table_rows`), so ``pd.DataFrame(data["rows"])`` matches the page.
+scripted access, e.g. Python ``requests`` — its ``rows`` follow the page's table order and
+include ``median_tpm`` for QTL phenotypes with expression data.
 """
 
 from __future__ import annotations
@@ -82,6 +82,7 @@ class Hit:
     ref: str | None = None
     alt: str | None = None
     rs_id: int | None = None
+    median_tpm: float | None = None
 
     @property
     def phenotype_html(self) -> Markup:
@@ -218,7 +219,10 @@ def _variant_rows(
                         dataset=dataset_label,
                         type=qtl_type,
                         is_gwas=False,
-                        hits=[Hit(h.phenotype_id, h.pvalue, h.beta) for h in ranked],
+                        hits=[
+                            Hit(h.phenotype_id, h.pvalue, h.beta, median_tpm=h.median_tpm)
+                            for h in ranked
+                        ],
                         dataset_id=dataset_id,
                     )
                 )
@@ -267,6 +271,7 @@ def _lead_hit(lead: PhenotypeLead) -> Hit:
         ref=lead.ref,
         alt=lead.alt,
         rs_id=lead.rs_id,
+        median_tpm=lead.median_tpm,
     )
 
 
@@ -367,11 +372,12 @@ def _search(repo: QtlRepository, query: str, datasets: str, p: str) -> SearchOut
 
 def _table_rows(out: SearchOutcome) -> list[dict[str, Any]]:
     """The Search data table, flattened: one dict per table row (context x phenotype), with the
-    table's columns in the table's order — so ``pd.DataFrame(rows)`` reproduces the page.
+    table's columns in the table's order, plus optional ``median_tpm``.
 
     Gene searches: ``context, dataset, type, phenotype, lead_snp, variant, pvalue, beta``;
     variant searches: ``context, dataset, type, phenotype, pvalue, beta`` (``phenotype`` is
-    ``None`` for GWAS rows, shown as a dash on the page)."""
+    ``None`` for GWAS rows, shown as a dash on the page). ``median_tpm`` is added only for QTL
+    phenotypes with a stored value, including zero."""
     is_gene = out.mode == "gene"
     table: list[dict[str, Any]] = []
     for r in out.rows:
@@ -387,6 +393,8 @@ def _table_rows(out: SearchOutcome) -> list[dict[str, Any]]:
                 row["variant"] = h.variant
             row["pvalue"] = h.pvalue
             row["beta"] = h.beta
+            if h.median_tpm is not None:
+                row["median_tpm"] = h.median_tpm
             table.append(row)
     return table
 

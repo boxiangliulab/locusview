@@ -123,6 +123,7 @@ class EqtlAssociation:
     # phenotype (see ``routers/locus.py``'s ``_group_by_phenotype``), since one genomic window can
     # legitimately contain variants tested against several different phenotypes at once.
     phenotype_id: str | None = None
+    median_tpm: float | None = None
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,7 @@ class PhenotypeLead:
     rs_id: int | None
     pvalue: float | None
     beta: float | None
+    median_tpm: float | None = None
 
 
 @dataclass(frozen=True)
@@ -664,6 +666,7 @@ class FakeQtlRepository:
                         a.rs_id,
                         a.pvalue,
                         a.beta,
+                        a.median_tpm,
                     ),
                 )
                 for pid, a in best.items()

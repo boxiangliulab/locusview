@@ -33,13 +33,17 @@ def _repo() -> FakeQtlRepository:
         associations=[
             # The searched variant (rs1042522 at 17:7676154), tested against two phenotypes in
             # Whole_Blood and one in Liver; nothing at that position in dataset 3.
-            EqtlAssociation(1, 141510, 1042522, 17, 7_676_154, 1e-9, 0.5, 0.05, phenotype_id="P_A"),
+            EqtlAssociation(
+                1, 141510, 1042522, 17, 7_676_154, 1e-9, 0.5, 0.05,
+                phenotype_id="P_A", median_tpm=12.5,
+            ),
             EqtlAssociation(1, 141510, 1042522, 17, 7_676_154, 0.3, 0.1, 0.05, phenotype_id="P_B"),
             EqtlAssociation(2, 141510, 1042522, 17, 7_676_154, 0.02, 0.1, 0.05, phenotype_id="P_C"),
             # TP53's own phenotype in dataset 3 (sQTL), lead elsewhere in the cis window.
             EqtlAssociation(3, 141510, None, 17, 7_700_000, 1e-4, 0.2, 0.05, phenotype_id="clu_1"),
             EqtlAssociation(
-                3, 141510, 555, 17, 7_710_000, 1e-6, 0.2, 0.05, "C", "G", phenotype_id="clu_1"
+                3, 141510, 555, 17, 7_710_000, 1e-6, 0.2, 0.05, "C", "G",
+                phenotype_id="clu_1", median_tpm=0.0,
             ),
             EqtlAssociation(3, 141510, None, 17, 7_720_000, 1e-3, 0.3, 0.05, phenotype_id="clu_2"),
         ],
@@ -264,6 +268,7 @@ def test_api_variant_search_returns_the_table_rows() -> None:
             "phenotype": "P_A",
             "pvalue": 1e-9,
             "beta": 0.5,
+            "median_tpm": 12.5,
         },
         {
             "context": "Whole_Blood",
@@ -315,6 +320,7 @@ def test_api_gene_search_rows_carry_lead_snp_and_variant() -> None:
         "variant",
         "pvalue",
         "beta",
+        "median_tpm",
     ]
     assert body["rows"][1:] == [
         {
@@ -326,6 +332,7 @@ def test_api_gene_search_rows_carry_lead_snp_and_variant() -> None:
             "variant": "chr17:7710000 C>G",
             "pvalue": 1e-6,
             "beta": 0.2,
+            "median_tpm": 0.0,
         },
         {
             "context": "Blood",
@@ -371,8 +378,8 @@ def _api_as_page_text(rows: list[dict[str, Any]]) -> list[list[str]]:
     """The API rows formatted the way the page displays them (rounded p / beta, dash for GWAS)."""
     out = []
     for r in rows:
-        cells = [str(v) if v is not None else "" for v in r.values()]
-        keys = list(r)
+        keys = [key for key in r if key != "median_tpm"]  # API-only phenotype metadata
+        cells = [str(r[key]) if r[key] is not None else "" for key in keys]
         cells[keys.index("phenotype")] = r["phenotype"] if r["phenotype"] is not None else "—"
         cells[keys.index("pvalue")] = f"{r['pvalue']:.2e}"
         cells[keys.index("beta")] = f"{r['beta']:.3f}"
