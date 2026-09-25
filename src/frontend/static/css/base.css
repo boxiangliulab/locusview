@@ -10,6 +10,7 @@
   --surface: #ffffff;
   --accent: #212161;
   --accent-soft: #dbeafe;
+  --link: #4750dd;
   --lead: #f97316;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -28,7 +29,7 @@ body {
   line-height: 1.5;
 }
 
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .muted { color: var(--muted); }
 .mono { font-family: var(--mono); }
@@ -193,9 +194,9 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 .sd-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; }
 .sd-chip {
   padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
-  color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 12.5px;
+  color: var(--link); text-decoration: none; font-family: var(--mono); font-size: 12.5px;
 }
-.sd-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sd-chip:hover { border-color: var(--link); background: var(--accent-soft); }
 .sd-scope { font-size: 13px; margin: 12px 0 0; }
 .sd-message { font-size: 14px; margin: 24px 0 0; }
 .sd-results-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin: 30px 0 12px; }
@@ -221,8 +222,8 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 .sd-table td.sd-nowrap { white-space: nowrap; overflow-wrap: normal; }
 .sd-table td.sd-variant { overflow-wrap: normal; }
 .sd-table td.sd-pheno { overflow-wrap: normal; word-break: normal; }
-.sd-phenotype-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.sd-phenotype-link:hover { color: #35358a; }
+.sd-phenotype-link { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.sd-phenotype-link:hover { color: var(--link); text-decoration-thickness: 2px; }
 .sd-table td { vertical-align: top; }
 .sd-table tbody.sd-group { border-top: 2px solid var(--line); }
 .sd-context { font-weight: 600; }
@@ -350,14 +351,14 @@ th[aria-sort="descending"] .sd-arrow::after { content: "\2193"; opacity: 1; }
 .db-plot-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
 .db-plot-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
 .db-plot-header .sub { font-size: 12px; color: var(--faint); margin-top: 4px; font-family: var(--mono); }
-.db-plot-header h2 a { color: var(--ink); text-decoration: none; }
-.db-plot-header h2 a:hover { color: var(--accent); text-decoration: underline; }
+.db-plot-header h2 a { color: var(--link); text-decoration: none; }
+.db-plot-header h2 a:hover { color: var(--link); text-decoration: underline; }
 .db-external-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
 .db-external-links a {
   padding: 2px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
-  color: var(--muted); font-size: 10.5px; text-decoration: none;
+  color: var(--link); font-size: 10.5px; text-decoration: none;
 }
-.db-external-links a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.db-external-links a:hover { border-color: var(--link); color: var(--link); text-decoration: none; }
 
 /* After Run Query the QTL results-by-phenotype table replaces the sidebar (same width/slot),
    with a back button to the picker; the locuszoom plots keep the main column. */

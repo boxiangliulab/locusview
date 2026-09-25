@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Expanded the Home introduction to explain cross-context QTL/GWAS exploration, LocusZoom plots,
+  and API use; strengthened its heading's downward shadow. Set content links to `#4750DD` while
+  keeping high-contrast navigation links light on the navy header. All 83 focused tests passed;
+  deployed `locusview:home-copy-links-20260925` and verified five public pages.
 - Made the four Home statistic cards stand out against the navy hero with a clearer border,
   light-blue top rule, solid pale surface, and stronger drop shadow. All 21 Home tests passed;
   deployed `locusview:card-contrast-20260925` and verified the public card styles.

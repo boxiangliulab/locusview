@@ -11,7 +11,7 @@
   .hero h1 {
     font-size: clamp(28px, 2.25vw, 40px); font-weight: 700; letter-spacing: -0.4px;
     line-height: 1.2; margin: 0 0 22px; white-space: nowrap; color: #fff;
-    text-shadow: 0 3px 5px rgba(0, 0, 0, 0.3);
+    text-shadow: 0 5px 9px rgba(0, 0, 0, 0.65), 0 2px 3px rgba(0, 0, 0, 0.5);
   }
   .hero h1 .accent { color: #e3efff; }
   .hero p.lede { font-size: 16px; color: #dee5ff; line-height: 1.75; margin-bottom: 32px; }
@@ -121,7 +121,7 @@
 <div class="hero">
   <div class="hero-inner">
     <h1>LocusView：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
-    <p class="lede">locusview is an interactive portal for publicly available quantitative trait loci (QTL) and GWAS data. Compare association signal across tissues and traits side by side, and search by gene, genomic region, or variant.</p>
+    <p class="lede">LocusView brings publicly available quantitative trait loci (QTL) and GWAS data together in one interactive portal. Explore how genetic variants relate to molecular phenotypes across tissues and cell types, and compare association signals across datasets and traits. Search for a gene or variant, browse a genomic region, and open LocusZoom plots to inspect the associations behind each result. You can also retrieve Search data results through the API for further analysis.</p>
     <div class="hero-stats">
       <div class="stat-card">
         <div class="value">{{ stats.datasets }}</div>
