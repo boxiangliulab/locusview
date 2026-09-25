@@ -49,6 +49,9 @@ code {
   height: 56px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 32px;
+  position: relative;
   padding: 0 28px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -57,20 +60,19 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-right: 32px;
   flex-shrink: 0;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--ink);
 }
 .site-header .brand span.accent { color: var(--accent); }
 
-.site-nav { display: flex; gap: 2px; flex: 1; }
+.site-nav { display: flex; align-items: center; gap: 8px; }
 .site-nav a {
   padding: 7px 14px;
   border-radius: 6px;
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--muted);
   text-decoration: none;
@@ -79,10 +81,19 @@ code {
 .site-nav a.active { color: var(--accent); background: var(--accent-soft); }
 
 .site-header .version {
+  position: absolute;
+  right: 28px;
   font-size: 11px;
   color: var(--faint);
   font-family: var(--mono);
   flex-shrink: 0;
+}
+
+@media (max-width: 860px) {
+  .site-header { height: auto; min-height: 56px; flex-wrap: wrap; gap: 6px 12px; padding: 10px 16px; }
+  .site-header .brand { width: 100%; justify-content: center; }
+  .site-nav { order: 2; width: 100%; justify-content: center; flex-wrap: wrap; }
+  .site-header .version { top: 18px; right: 16px; }
 }
 
 .site-footer {

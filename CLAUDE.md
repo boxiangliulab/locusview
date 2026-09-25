@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Centered the shared top navigation group, slightly enlarged its brand and page links, and let
+  links wrap onto a second row on narrow screens. Enlarged Tutorial's step, table, API, and code text.
+  All 64 focused tests passed; deployed `locusview:nav-tutorial-20260925` and verified the public
+  Home, Search data, Data Browser, Tutorial, and News pages.
 - Made variant Search data results span the same full content width as gene results. The missing
   Lead SNP and Variant column space now goes to Phenotype, while other shared columns keep their widths.
   All 33 Search data tests passed; deployed `locusview:search-width-20260925` and confirmed public
