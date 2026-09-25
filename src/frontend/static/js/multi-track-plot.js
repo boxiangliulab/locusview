@@ -29,7 +29,7 @@
 // from — see routers/comparison.py) — clicking one calls back with {chrom, position} so the
 // caller (browser.js) can fetch the variant-comparison partial.
 const MultiTrackPlot = (() => {
-  const TRACK_COLOR = { qtl: "#2563eb", gwas: "#7c3aed" };
+  const TRACK_COLOR = { qtl: "#072684", gwas: "#7c3aed" };
   const LEAD_COLOR = "#f97316";
   // Variant-mode searches mark the searched variant with a pink diamond drawn over the lead/LD
   // colors (see queryVariantMarker()).

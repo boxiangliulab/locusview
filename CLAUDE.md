@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Extended the `#072684` theme to action buttons, the Home statistics and available body-map
+  tissues, QTL badges, and QTL plot tracks. Unavailable tissues remain gray and content links
+  retain the requested `#4750DD`. All 73 focused tests and both plot-script syntax checks passed;
+  deployed `locusview:blue-accents-20260925` and verified the public pages and scripts.
 - Changed the shared navigation and Home hero backgrounds to `#072684`, with coordinated nav
   hover/active backgrounds and divider lines. Text and content-link colors remain as configured.
   All 21 Home tests passed; deployed `locusview:blue-bg-20260925` and verified four public pages.
