@@ -16,13 +16,14 @@ def test_news_renders_entries() -> None:
     response = client.get("/news")
     assert response.status_code == 200
     assert "News" in response.text
-    assert "Regional plot with LD-based coloring" in response.text
+    assert "Search data links to LocusZoom plots" in response.text
+    assert "Browse tissues and the expanded QTL catalogue" in response.text
 
 
-def test_news_marks_upcoming_entries() -> None:
+def test_news_has_no_stale_upcoming_body_map() -> None:
     response = client.get("/news")
-    assert 'class="news-entry upcoming"' in response.text
-    assert "Tissue body map" in response.text
+    assert 'class="news-entry upcoming"' not in response.text
+    assert "Upcoming" not in response.text
 
 
 def test_news_nav_marks_news_active() -> None:

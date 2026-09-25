@@ -84,8 +84,10 @@ def test_home_no_datasets_configured() -> None:
 
 def test_home_shows_citations() -> None:
     response = _client([]).get("/")
-    assert "GTEx Consortium" in response.text
-    assert "10.1126/science.aaz1776" in response.text
+    assert "LocusCompare" in response.text
+    assert "LocusCompare2" in response.text
+    assert "https://doi.org/10.1038/s41588-019-0404-0" in response.text
+    assert "https://doi.org/10.1038/s41588-025-02331-x" in response.text
 
 
 def test_home_nav_marks_home_active() -> None:
@@ -130,7 +132,7 @@ def test_home_dataset_count_uses_qtl_lists_only() -> None:
 def test_home_stats_show_catalog_counts_and_context_plus() -> None:
     response = _client(catalog_stats=CatalogStats(151, 3, 51, True, 54_992_778_751)).get("/")
     assert (
-        'LocusView：<span class="accent">'
+        '<span class="brand-name">LocusView</span>：<span class="accent">'
         'Explore QTL associations across cell types and tissues</span>'
     ) in response.text
     for value, label in (

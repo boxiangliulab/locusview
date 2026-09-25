@@ -1,6 +1,6 @@
-{# Data Browser sidebar: cascading QTL (Dataset -> Source project ID -> QTL type -> Context) / GWAS (Dataset ->
+{# Data browser sidebar: cascading QTL (Dataset -> Source project ID -> QTL type -> Context) / GWAS (Dataset ->
    Accession+Trait) picker (static/js/browser-picker.js drives everything live against
-   routers/browser.py's /api/browser/... catalog endpoints), locus mode + input, Run Query.
+   routers/browser.py's /api/browser/... catalog endpoints), locus mode + input, Run query.
    Context: preselected_qtl_rows [{dataset, qtl_type, context_ids}], preselected_gwas_rows
    [{dataset, option_ids}], has_qtl_datasets, has_gwas_datasets, locus_mode
    ("gene"|"region"|"variant"), gene, region, variant. #}
@@ -66,7 +66,7 @@
     </div>
     <div class="db-locus-input" id="db-locus-variant" {{ '' if locus_mode == 'variant' else 'hidden' }}>
       <input type="text" id="db-variant" placeholder="rsID or chr17:7670000" value="{{ variant }}">
-      <div class="db-hint">Locus View centers +/-1 MB around the variant.</div>
+      <div class="db-hint">Locus view centers +/-1 MB around the variant.</div>
     </div>
   </div>
 
@@ -78,7 +78,7 @@
     <div class="db-hint">1000G phase 3 — used to color QTL and GWAS locuszoom points by LD to each lead.</div>
   </div>
 
-  <button type="button" id="db-run" class="db-run-btn"><span>&#9654;</span> Run Query</button>
+  <button type="button" id="db-run" class="db-run-btn"><span>&#9654;</span> Run query</button>
   {# Shown once a query has results, to get back to them without re-running (browser.js). #}
   <button type="button" id="db-show-results" class="db-add-row-btn db-show-results-btn" hidden>View QTL results &rarr;</button>
 </aside>

@@ -16,9 +16,16 @@ class Citation:
 CITATIONS: list[Citation] = [
     Citation(
         text=(
-            "The GTEx Consortium. The GTEx Consortium atlas of genetic regulatory effects "
-            "across human tissues. Science 369, 1318–1330 (2020)."
+            "Liu, B. et al. Abundant associations with gene expression complicate GWAS "
+            "follow-up. Nature Genetics 51, 768–769 (2019). LocusCompare."
         ),
-        doi="10.1126/science.aaz1776",
+        doi="10.1038/s41588-019-0404-0",
+    ),
+    Citation(
+        text=(
+            "Liu, F. et al. Mitigating inconsistencies in GWAS follow-up analyses with "
+            "LocusCompare2. Nature Genetics 57, 2606–2613 (2025)."
+        ),
+        doi="10.1038/s41588-025-02331-x",
     ),
 ]

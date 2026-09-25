@@ -19,18 +19,37 @@ class NewsEntry:
 
 NEWS: list[NewsEntry] = [
     NewsEntry(
-        date="August 2026",
-        title="Data Browser: region & variant search, cross-tissue comparison",
+        date="September 2026",
+        title="Search data links to LocusZoom plots",
         body=(
-            "Search by genomic region or variant, not just gene symbol. A new Data Browser tab "
-            "adds a query builder (dataset, tissue, gene/region/variant) and a Cross-Dataset mode "
+            "Search for a gene or variant across QTL contexts and GWAS traits. Select a QTL "
+            "phenotype in the results to open its plot in Data browser with the matching "
+            "dataset and context. Search results are also available through the API."
+        ),
+        tags=["Search data", "Data browser", "LocusZoom", "API"],
+    ),
+    NewsEntry(
+        date="September 2026",
+        title="Browse tissues and the expanded QTL catalogue",
+        body=(
+            "The Home page now shows live dataset, QTL type, context, and association counts. "
+            "Select an available tissue on the body map to see its datasets."
+        ),
+        tags=["Tissue map", "QTL datasets"],
+    ),
+    NewsEntry(
+        date="August 2026",
+        title="Data browser: region and variant search, cross-tissue comparison",
+        body=(
+            "Search by genomic region or variant as well as gene symbol. The Data browser tab "
+            "adds a query builder (dataset, tissue, gene/region/variant) and a cross-dataset mode "
             "that compares a variant's association strength across every integrated tissue."
         ),
-        tags=["Data Browser", "Region search", "Variant search", "Cross-tissue comparison"],
+        tags=["Data browser", "Region search", "Variant search", "Cross-tissue comparison"],
     ),
     NewsEntry(
         date="July 2026",
-        title="Regional plot with LD-based coloring",
+        title="Regional plot with LD coloring",
         body=(
             "The gene page gained a LocusZoom-style regional association plot: variants by "
             "genomic position vs. -log10(p), colored by LD r-squared to a lead variant (click any "
@@ -40,20 +59,11 @@ NEWS: list[NewsEntry] = [
     ),
     NewsEntry(
         date="July 2026",
-        title="locusview v1.0 - initial release",
+        title="LocusView v1.0 — initial release",
         body=(
             "Search a gene by symbol or Ensembl id and browse its eQTLs across GTEx v8 tissues, "
             "with CSV/TSV download."
         ),
         tags=["Gene search", "GTEx v8", "CSV/TSV download"],
-    ),
-    NewsEntry(
-        date="Upcoming",
-        title="Tissue body map",
-        body=(
-            "An anatomogram (EBI Expression Atlas, CC-BY) highlighting which tissues have a "
-            "significant eQTL for the current gene, click-through to that tissue's regional plot."
-        ),
-        upcoming=True,
     ),
 ]

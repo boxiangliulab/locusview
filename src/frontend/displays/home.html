@@ -13,6 +13,7 @@
     line-height: 1.2; margin: 0 0 22px; white-space: nowrap; color: #fff;
     text-shadow: 0 5px 9px rgba(0, 0, 0, 0.65), 0 2px 3px rgba(0, 0, 0, 0.5);
   }
+  .hero h1 .brand-name { color: #F1EDEA; }
   .hero h1 .accent { color: #e3efff; }
   .hero p.lede { font-size: 16px; color: #dee5ff; line-height: 1.75; margin-bottom: 32px; }
   .hero-stats { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
@@ -36,7 +37,7 @@
   table.dataset-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   table.dataset-table th {
     padding: 12px 18px; text-align: left; background: var(--bg); border-bottom: 1px solid var(--line);
-    color: var(--accent); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--accent); font-weight: 600; font-size: 11px; letter-spacing: 0.5px;
   }
   table.dataset-table td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
   .dataset-table-wrap > table.dataset-table th:not(:first-child),
@@ -120,7 +121,7 @@
 {% block content %}
 <div class="hero">
   <div class="hero-inner">
-    <h1>LocusView：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
+    <h1><span class="brand-name">LocusView</span>：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
     <p class="lede">LocusView brings publicly available quantitative trait loci (QTL) and GWAS data together in one interactive portal. Explore how genetic variants relate to molecular phenotypes across tissues and cell types, and compare association signals across datasets and traits. Search for a gene or variant, browse a genomic region, and open LocusZoom plots to inspect the associations behind each result. You can also retrieve Search data results through the API for further analysis.</p>
     <div class="hero-stats">
       <div class="stat-card">
@@ -153,19 +154,19 @@
 
 <div class="section">
   <h2>Available QTL datasets</h2>
-  <p class="lede">Datasets currently integrated into locusview, read live from the shared locuscompare2 database.</p>
+  <p class="lede">Datasets currently integrated into LocusView, read live from the shared LocusCompare2 database.</p>
   {% include "partials/_dataset_table.html" %}
 </div>
 
 <div class="section">
   <h2>Available GWAS datasets</h2>
-  <p class="lede">GWAS traits currently integrated into locusview.</p>
+  <p class="lede">GWAS traits currently integrated into LocusView.</p>
   {% include "partials/_gwas_dataset_table.html" %}
 </div>
 
 <div class="section">
   <h2>Citations</h2>
-  <p class="lede">Please cite the following when using locusview data in publications.</p>
+  <p class="lede">Please cite LocusCompare and LocusCompare2 when using these tools in publications.</p>
   {% include "partials/_citations.html" %}
 </div>
 {% endblock %}

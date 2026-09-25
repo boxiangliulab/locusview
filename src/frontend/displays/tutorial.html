@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Tutorial — locusview{% endblock %}
+{% block title %}Tutorial — LocusView{% endblock %}
 {% block head %}
 <style>
   .tutorial-page { width: var(--page-content-width); margin: 0 auto; padding: 48px 0 24px; }
@@ -19,7 +19,7 @@
   .tutorial-table th {
     position: sticky; top: 0; z-index: 1; padding: 11px 14px; text-align: left;
     background: var(--bg); color: var(--accent); border-bottom: 1px solid var(--line);
-    font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap;
+    font-size: 12px; letter-spacing: 0.5px; white-space: nowrap;
   }
   .tutorial-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
   .tutorial-table tbody tr:last-child td { border-bottom: 0; }
@@ -43,21 +43,21 @@
   <p class="tutorial-intro">
     Start with <a href="/search-data">Search data</a> to find a gene or variant across QTL contexts
     and GWAS traits. Select a QTL phenotype to open its LocusZoom plot in
-    <a href="/browser">Data Browser</a>. You can also open Data Browser directly to search a region
+    <a href="/browser">Data browser</a>. You can also open Data browser directly to search a region
     or compare multiple datasets. For scripts, see <a href="#request-from-api">Request data from the API</a>.
   </p>
 
   <div class="tutorial-steps">
     <div class="tutorial-step"><strong>1. Search data</strong><span>Enter a gene symbol, Ensembl ID, rsID, or chromosome position. Adjust the p-value threshold if needed.</span></div>
-    <div class="tutorial-step"><strong>2. Choose a phenotype</strong><span>Click a QTL phenotype in the results table. Data Browser opens with its dataset, context, and locus selected.</span></div>
+    <div class="tutorial-step"><strong>2. Choose a phenotype</strong><span>Click a QTL phenotype in the results table. Data browser opens with its dataset, context, and locus selected.</span></div>
     <div class="tutorial-step"><strong>3. Explore the plot</strong><span>The selected phenotype's LocusZoom plot loads automatically. Its blue badge shows the QTL type; the title shows source project ID, context, and phenotype.</span></div>
   </div>
 
   <section class="tutorial-section tutorial-api" id="browse-directly">
     <h2>Browse a region or compare datasets</h2>
     <p>
-      In <a href="/browser">Data Browser</a>, select QTL contexts, GWAS traits, or both. Choose
-      Gene, Region, or Variant, enter a locus, and click <strong>Run Query</strong>. GWAS plots appear
+      In <a href="/browser">Data browser</a>, select QTL contexts, GWAS traits, or both. Choose
+      Gene, region, or variant, enter a locus, and click <strong>Run query</strong>. GWAS plots appear
       immediately; check rows in the QTL results table to draw individual phenotype plots. A
       variant search in Search data includes GWAS results, but GWAS rows have no phenotype link.
     </p>
@@ -109,7 +109,7 @@ df = pd.DataFrame(data["rows"])</code></pre>
         (<code>phenotype</code> is <code>null</code> for GWAS rows). p-values and β come back at full precision; the page only rounds them for display.</li>
       <li><code>n_contexts</code> and <code>n_rows</code> count the contexts and table rows.</li>
       <li>Gene searches cover QTL only (GWAS has no gene concept); variant searches cover QTL and GWAS.</li>
-      <li>Errors return <code>{"query": ..., "error": ...}</code> with status <code>400</code> (missing <code>q</code>, invalid <code>p</code>, unrecognized input, or a region — use the Data Browser for regions) or <code>404</code> (unknown gene or rsID).</li>
+      <li>Errors return <code>{"query": ..., "error": ...}</code> with status <code>400</code> (missing <code>q</code>, invalid <code>p</code>, unrecognized input, or a region — use the Data browser for regions) or <code>404</code> (unknown gene or rsID).</li>
     </ul>
     <script>
       // Fill in the address this page was actually reached at (works behind proxies/tunnels).

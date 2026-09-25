@@ -146,7 +146,7 @@ def test_unrecognized_query_and_unsupported_chromosome() -> None:
 
 def test_data_browser_click_limits_to_its_datasets() -> None:
     html = _get({"chrom": "17", "position": 7_676_154, "datasets": "qtl:2", "p": "1"})
-    assert "Showing only the datasets selected in the Data Browser" in html
+    assert "Showing only the datasets selected in the Data browser" in html
     assert 'href="/search-data?q=chr17%3A7676154&amp;p=1"' in html  # "Search all datasets"
     assert 'name="datasets" value="qtl:2"' in html  # changing the threshold keeps the scope
     assert "1 of 1 datasets" in html

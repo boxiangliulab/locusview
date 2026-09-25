@@ -31,6 +31,14 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Standardized visible page labels and headings to sentence case while retaining product names
+  and scientific acronyms. Set the Home heading's LocusView text to `#F1EDEA`.
+  Replaced the GTEx citation with the verified LocusCompare (2019) and LocusCompare2 (2025)
+  papers and linked both DOIs. Refreshed News with the Search data plot links, live Home counts,
+  and tissue map, and removed its obsolete upcoming tissue-map item.
+  All 83 focused page tests passed, as did Ruff and `git diff --check`. The full test run had
+  317 passes and the existing `test_reads_selected_skill` failure. Deployed
+  `locusview:copy-citations-news-20260925` and verified the public Home and News pages.
 - Extended the `#072684` theme to action buttons, the Home statistics and available body-map
   tissues, QTL badges, and QTL plot tracks. Unavailable tissues remain gray and content links
   retain the requested `#4750DD`. All 73 focused tests and both plot-script syntax checks passed;
