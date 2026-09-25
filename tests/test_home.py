@@ -140,7 +140,7 @@ def test_home_stats_show_catalog_counts_and_context_plus() -> None:
         card = f'<div class="value">{value}</div>\n        <div class="label">{label}</div>'
         assert card in response.text
     assert (
-        '<div class="value" title="54,992,778,751 associations">54992M+</div>\n'
+        '<div class="value" title="54,992,778,751 associations">54992 M+</div>\n'
         '        <div class="label">Associations</div>'
     ) in response.text
 

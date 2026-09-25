@@ -1,6 +1,6 @@
 [project]
 name = "locusview"
-version = "0.0.0"
+version = "1.0"
 description = "A searchable home for publicly available QTL data."
 readme = "README.md"
 requires-python = ">=3.11"

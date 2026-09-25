@@ -31,6 +31,15 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Bumped locusview to v1.0 in package metadata and the shared application version; the header,
+  footer, not-found page, health response, and CLI now use the same version. All 36 focused tests
+  passed; deployed `locusview:v1.0-20260925` and verified the public header, footer, and health API.
+- Added a space between the Home Associations number and `M+`, and removed the hero description's
+  620px width cap so it wraps naturally across the shared content column. Verified both on the
+  public Home page.
+- Centered all non-first columns in the Home Available QTL and GWAS tables; Dataset and Trait
+  remain left-aligned, and the body-map result table keeps its existing alignment. Verified the
+  public Home page serves the new table alignment rule.
 - Shortened the Home Associations card to whole millions plus a trailing `M+`; the unabridged
   current count remains available on hover. All 21 Home tests passed; deployed
   `locusview:assoc-millions-20260925` and verified the public Home card.

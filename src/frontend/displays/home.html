@@ -13,7 +13,7 @@
     line-height: 1.2; margin: 0 0 22px; white-space: nowrap;
   }
   .hero h1 .accent { color: var(--accent); }
-  .hero p.lede { font-size: 16px; color: #475569; max-width: 620px; line-height: 1.75; margin-bottom: 32px; }
+  .hero p.lede { font-size: 16px; color: #475569; line-height: 1.75; margin-bottom: 32px; }
   .hero-stats { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
   .stat-card {
     min-width: 172px; background: linear-gradient(145deg, #ffffff, #eff6ff);
@@ -38,6 +38,8 @@
     color: var(--accent); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
   }
   table.dataset-table td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+  .dataset-table-wrap > table.dataset-table th:not(:first-child),
+  .dataset-table-wrap > table.dataset-table td:not(:first-child) { text-align: center; }
   /* Tighter rows for the body-map click-result table specifically (not the QTL/GWAS dataset
      tables above, which keep the roomier default) — .body-map-side is sized wide enough that
      nowrap content never needs horizontal scroll. */
@@ -118,11 +120,7 @@
 <div class="hero">
   <div class="hero-inner">
     <h1>LocusView：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
-    <p class="lede">
-      locusview is an interactive portal for publicly available quantitative trait loci (QTL) and
-      GWAS data. Compare association signal across tissues and traits side by side, and search by
-      gene, genomic region, or variant.
-    </p>
+    <p class="lede">locusview is an interactive portal for publicly available quantitative trait loci (QTL) and GWAS data. Compare association signal across tissues and traits side by side, and search by gene, genomic region, or variant.</p>
     <div class="hero-stats">
       <div class="stat-card">
         <div class="value">{{ stats.datasets }}</div>
@@ -137,7 +135,7 @@
         <div class="label">Contexts</div>
       </div>
       <div class="stat-card">
-        <div class="value" title="{{ '{:,}'.format(stats.associations) }} associations">{{ stats.associations // 1_000_000 }}M+</div>
+        <div class="value" title="{{ '{:,}'.format(stats.associations) }} associations">{{ stats.associations // 1_000_000 }} M+</div>
         <div class="label">Associations</div>
       </div>
     </div>
