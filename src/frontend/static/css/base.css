@@ -13,12 +13,9 @@
   --lead: #f97316;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --page-content-width: 80%;
+  /* Use 70% on wide screens; grow toward the viewport edge as the window narrows. */
+  --page-content-width: max(70%, min(900px, calc(100% - 32px)));
   --page-title-size: clamp(30px, 2.8vw, 38px);
-}
-
-@media (max-width: 900px) {
-  :root { --page-content-width: calc(100% - 32px); }
 }
 
 * { box-sizing: border-box; }
@@ -151,9 +148,7 @@ table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums;
 .badge-orange { background: #ffedd5; color: #9a3412; }
 
 /* ── Search data tab (search_data.html) ──────────────────────────────────── */
-/* The tab's content lives in one column 80% of the window wide (so it grows as the window is
-   widened), everything in it left-aligned; the results table fills the column. On narrow
-   windows the column takes the full width. */
+/* Search data shares the responsive content column with Home, Tutorial, and News. */
 .search-data { width: var(--page-content-width); margin: 0 auto; padding: 36px 0; }
 .search-data .sd-form { max-width: 900px; }
 .search-data h1 { font-size: var(--page-title-size); font-weight: 700; margin: 0 0 10px; }

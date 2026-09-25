@@ -96,6 +96,10 @@
     position: sticky; top: 0; z-index: 1;
   }
   .body-map-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  @media (max-width: 760px) {
+    .body-map-diagram, .body-map-side { flex: 0 0 100%; max-width: 100%; }
+    .body-map-diagram { overflow-x: auto; }
+  }
 
   .citation-list { display: flex; flex-direction: column; gap: 12px; }
   .citation {

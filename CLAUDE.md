@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Set the shared Home, Search data, Tutorial, and News content column to 70% on wide screens;
+  it expands smoothly toward the available width on narrow screens, keeping 16px side margins.
+  The Home body map's side panel now stacks within the column on small screens. All 31 focused
+  page tests passed; deployed `locusview:width70-20260925` and verified all four public pages.
 - Deepened the Home hero's blue background above the divider and centered its content vertically
   while keeping the heading, description, and statistics left-aligned within the page column.
   All 21 Home tests passed; deployed `locusview:hero-20260925` and verified the public Home page.
