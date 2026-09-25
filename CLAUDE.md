@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Shortened the Home Associations card to whole millions plus a trailing `M+`; the unabridged
+  current count remains available on hover. All 21 Home tests passed; deployed
+  `locusview:assoc-millions-20260925` and verified the public Home card.
 - Centered the four Home statistics cards as a group within the page, leaving the hero heading
   and description left-aligned in their existing positions. All 21 Home tests passed; deployed
   `locusview:stats-center-20260925` and verified the public Home page.

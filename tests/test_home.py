@@ -135,10 +135,14 @@ def test_home_stats_show_catalog_counts_and_context_plus() -> None:
     ) in response.text
     for value, label in (
         ("151", "Datasets"), ("3", "QTL types"),
-        ("51+", "Contexts"), ("54,992,778,751", "Associations"),
+        ("51+", "Contexts"),
     ):
         card = f'<div class="value">{value}</div>\n        <div class="label">{label}</div>'
         assert card in response.text
+    assert (
+        '<div class="value" title="54,992,778,751 associations">54992M+</div>\n'
+        '        <div class="label">Associations</div>'
+    ) in response.text
 
 
 # ── Body map ─────────────────────────────────────────────────────────────────

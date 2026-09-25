@@ -137,7 +137,7 @@
         <div class="label">Contexts</div>
       </div>
       <div class="stat-card">
-        <div class="value">{{ "{:,}".format(stats.associations) }}</div>
+        <div class="value" title="{{ '{:,}'.format(stats.associations) }} associations">{{ stats.associations // 1_000_000 }}M+</div>
         <div class="label">Associations</div>
       </div>
     </div>
