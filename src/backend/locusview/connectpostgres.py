@@ -83,6 +83,7 @@ from typing import Any
 from locusview.requestinfo import (
     CHROMS,
     POPULATIONS,
+    CatalogStats,
     ConnectionFactory,
     Dataset,
     EqtlAssociation,
@@ -253,6 +254,36 @@ class PostgresQtlRepository:
                 raise RepositoryTimeoutError("database query timed out") from exc
         finally:
             conn.close()
+
+    def catalog_stats(self) -> CatalogStats:
+        """Read Home counts without scanning every multi-billion-row QTL shard.
+
+        QTL shards are append-only COPY tables whose id sequence starts at one and has cache size
+        one. A successful rebuild truncates and restarts the sequence. The sequence's last value
+        therefore tracks the row count for these shards. This avoids a full scan of roughly 9 TB
+        on every Home request.
+        """
+        row = self._query(
+            "SELECT "
+            "(SELECT count(*) FROM qtl_lists), "
+            "(SELECT count(DISTINCT qtl_type) FROM qtl_datasets), "
+            "(SELECT count(DISTINCT level_1_context) FROM qtl_contexts), "
+            "(SELECT EXISTS (SELECT 1 FROM qtl_contexts "
+            "WHERE nullif(trim(level_2_context), '') IS NOT NULL)), "
+            "(SELECT coalesce(sum(last_value), 0) FROM pg_sequences "
+            "WHERE schemaname = 'public' "
+            "AND sequencename ~ '^qtl_snp_[0-9]+_id_seq$' "
+            "AND to_regclass('public.' || regexp_replace(sequencename, '_id_seq$', '')) "
+            "IS NOT NULL)",
+            (),
+        )[0]
+        return CatalogStats(
+            datasets=int(row[0]),
+            qtl_types=int(row[1]),
+            contexts=int(row[2]),
+            has_subcontexts=bool(row[3]),
+            associations=int(row[4]),
+        )
 
     def datasets(self) -> list[Dataset]:
         """The QTL dataset catalog: one row per (dataset, context) whose shard is ready to query.

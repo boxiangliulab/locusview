@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from locusview.requestinfo import Dataset, FakeQtlRepository, GwasDataset, QtlContextEntry
+from locusview.requestinfo import (
+    CatalogStats,
+    Dataset,
+    FakeQtlRepository,
+    GwasDataset,
+    QtlContextEntry,
+)
 from locusview.web import create_app
 
 
@@ -12,9 +18,11 @@ def _client(
     datasets: list[Dataset] | None = None,
     gwas_datasets: list[GwasDataset] | None = None,
     qtl_contexts: list[QtlContextEntry] | None = None,
+    catalog_stats: CatalogStats | None = None,
 ) -> TestClient:
     repo = FakeQtlRepository(
-        datasets=datasets, gwas_datasets=gwas_datasets, qtl_contexts=qtl_contexts
+        datasets=datasets, gwas_datasets=gwas_datasets, qtl_contexts=qtl_contexts,
+        catalog_stats=catalog_stats,
     )
     return TestClient(create_app(repository=repo))
 
@@ -111,13 +119,26 @@ def test_home_no_gwas_datasets_configured() -> None:
     assert "No GWAS datasets configured" in response.text
 
 
-def test_home_dataset_count_includes_both_qtl_and_gwas() -> None:
+def test_home_dataset_count_uses_qtl_lists_only() -> None:
     response = _client(
         datasets=[Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL")],
         gwas_datasets=[GwasDataset(1, "Basophil_count", "EUR", "GWAS Catalog", "GCST90002379")],
     ).get("/")
-    # 1 QTL source-group + 1 GWAS trait = 2 datasets in the hero stat
-    assert '<div class="value">2</div>' in response.text
+    assert '<div class="value">1</div>\n        <div class="label">Datasets</div>' in response.text
+
+
+def test_home_stats_show_catalog_counts_and_context_plus() -> None:
+    response = _client(catalog_stats=CatalogStats(151, 3, 51, True, 54_992_778_751)).get("/")
+    assert (
+        'LocusView：<span class="accent">'
+        'Explore QTL associations across cell types and tissues</span>'
+    ) in response.text
+    for value, label in (
+        ("151", "Datasets"), ("3", "QTL types"),
+        ("51+", "Contexts"), ("54,992,778,751", "Associations"),
+    ):
+        card = f'<div class="value">{value}</div>\n        <div class="label">{label}</div>'
+        assert card in response.text
 
 
 # ── Body map ─────────────────────────────────────────────────────────────────

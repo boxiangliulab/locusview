@@ -44,6 +44,17 @@ class RepositoryTimeoutError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class CatalogStats:
+    """Home-page QTL counts from the shared catalog and association shards."""
+
+    datasets: int
+    qtl_types: int
+    contexts: int
+    has_subcontexts: bool
+    associations: int
+
+
+@dataclass(frozen=True)
 class Dataset:
     """A QTL dataset in the catalog (one per tissue), keyed by its integer id."""
 
@@ -190,6 +201,10 @@ class QtlRepository(Protocol):
 
     def datasets(self) -> list[Dataset]:
         """Return the dataset catalog."""
+        ...
+
+    def catalog_stats(self) -> CatalogStats:
+        """Return QTL list, type, context, and association counts for Home."""
         ...
 
     def resolve_gene(self, symbol_or_ensembl: str) -> Gene | None:
@@ -458,6 +473,7 @@ class FakeQtlRepository:
         gwas_datasets: Sequence[GwasDataset] | None = None,
         gwas_associations: Sequence[GwasAssociation] | None = None,
         qtl_contexts: Sequence[QtlContextEntry] | None = None,
+        catalog_stats: CatalogStats | None = None,
     ) -> None:
         """Store the canned rows each method below filters/scans in memory — no DB, no network."""
         self._datasets = list(datasets or ())
@@ -467,10 +483,23 @@ class FakeQtlRepository:
         self._gwas_datasets = list(gwas_datasets or ())
         self._gwas_associations = list(gwas_associations or ())
         self._qtl_contexts = list(qtl_contexts or ())
+        self._catalog_stats = catalog_stats
 
     def datasets(self) -> list[Dataset]:
         """See :meth:`QtlRepository.datasets`."""
         return list(self._datasets)
+
+    def catalog_stats(self) -> CatalogStats:
+        """See :meth:`QtlRepository.catalog_stats`."""
+        if self._catalog_stats is not None:
+            return self._catalog_stats
+        return CatalogStats(
+            datasets=len(self._datasets),
+            qtl_types=len({dataset.catalog_parts[1] for dataset in self._datasets}),
+            contexts=len({context.level_1 for context in self._qtl_contexts}),
+            has_subcontexts=any(context.level_2 for context in self._qtl_contexts),
+            associations=len(self._associations),
+        )
 
     def resolve_gene(self, symbol_or_ensembl: str) -> Gene | None:
         """See :meth:`QtlRepository.resolve_gene` — matches by symbol or bare/versioned Ensembl

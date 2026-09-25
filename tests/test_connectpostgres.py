@@ -22,6 +22,7 @@ from locusview.connectpostgres import (
     postgres_connection_factory,
 )
 from locusview.requestinfo import (
+    CatalogStats,
     Dataset,
     EqtlAssociation,
     Gene,
@@ -65,6 +66,19 @@ def test_row_to_eqtl_maps_and_casts_and_rs_id_is_none() -> None:
 
 def test_postgres_connection_factory_returns_callable() -> None:
     assert callable(postgres_connection_factory())
+
+
+def test_catalog_stats_reads_live_catalog_and_shard_sequences() -> None:
+    factory, log = _factory([(151, 3, 51, True, 54_992_778_751)])
+    assert PostgresQtlRepository(factory).catalog_stats() == CatalogStats(
+        151, 3, 51, True, 54_992_778_751
+    )
+    sql, params = log[0]
+    assert "count(*) FROM qtl_lists" in sql
+    assert "count(DISTINCT qtl_type) FROM qtl_datasets" in sql
+    assert "count(DISTINCT level_1_context) FROM qtl_contexts" in sql
+    assert "pg_sequences" in sql
+    assert params == ()
 
 
 # ── fake connection plumbing (mirrors the old LocuscompareRepository test pattern) ─────────────

@@ -92,11 +92,11 @@ def router(repo: QtlRepository) -> APIRouter:
         gwas_datasets = repo.gwas_datasets()
         gwas_rows = _gwas_dataset_table(gwas_datasets)
         body_map_regions = _body_map_regions(repo.qtl_contexts())
+        stats = repo.catalog_stats()
         return _render(
             "home.html",
             active="home",
-            n_datasets=len(dataset_rows) + len(gwas_rows),
-            n_tissues=len(datasets),
+            stats=stats,
             dataset_rows=dataset_rows,
             gwas_rows=gwas_rows,
             body_map_regions=body_map_regions,

@@ -30,6 +30,28 @@ Keep it current. The live "where we are right now" lives in
   API. All seven Tutorial tests passed; deployed as `locusview:tutorial-20260924` and verified
   the public `/tutorial` page returns the new content.
 
+## Work log — 2026-09-25
+- Enlarged the page titles on Home, Search data, Tutorial, and News. The Home heading now reads
+  "LocusView：Explore QTL associations across cell types and tissues" on one line at desktop
+  widths. Increased spacing, padding, type size, border emphasis, and shadow on its four live
+  statistic cards. Checked desktop and mobile layouts; 31 focused page tests passed. Deployed
+  `locusview:titles-20260925` and confirmed all four public pages return HTTP 200.
+- Matched the Home, Search data, Tutorial, and News content columns to the Search data page's
+  80% viewport width, with 16px side margins on narrow screens. Updated the Home hero to
+  "Explore QTL associations across cell types and tissues".
+- Home now shows four live QTL statistics: all `qtl_lists` rows, distinct
+  `qtl_datasets.qtl_type` values, distinct `qtl_contexts.level_1_context` values with `+` when
+  level 2 contexts exist, and association rows across the physical `qtl_snp_<id>` tables.
+  Association counts use each append-only shard's `id` sequence so Home does not scan roughly
+  9 TB of QTL data on every request. All 151 sequences matched their shard's `max(id)`;
+  an exact `count(*)` spot check also matched its sequence. In-progress or failed transactions
+  can temporarily advance a sequence ahead of committed rows.
+- Deployed `locusview:home-stats-20260925`; the public Home, Search data, Tutorial, and News pages
+  returned HTTP 200. At verification, Home showed 151 datasets, 3 QTL types, 51+ contexts,
+  and a growing association count. Targeted tests, Ruff on modified code, and mypy passed.
+  Full pytest had 317 passes and the existing `test_reads_selected_skill` failure in
+  `tests/test_qtl_data_agent.py`.
+
 ## What this is
 locusview aggregates publicly available **QTL** (quantitative trait locus) data and lets users
 **search, browse, and download** it. It is built by Boxiang Liu's lab **and** is a graduate-level

@@ -5,22 +5,26 @@
   .hero {
     background: linear-gradient(160deg, #eff6ff 0%, #f8fafc 100%);
     border-bottom: 1px solid var(--line);
-    padding: 56px 28px 48px;
+    padding: 56px 0 48px;
   }
-  .hero-inner { max-width: 960px; margin: 0 auto; }
-  .hero h1 { font-size: 38px; font-weight: 700; letter-spacing: -1.5px; line-height: 1.15; margin: 0 0 16px; }
+  .hero-inner { width: var(--page-content-width); margin: 0 auto; }
+  .hero h1 {
+    font-size: clamp(28px, 2.45vw, 44px); font-weight: 700; letter-spacing: -2.8px;
+    line-height: 1.2; margin: 0 0 22px; white-space: nowrap;
+  }
   .hero h1 .accent { color: var(--accent); }
   .hero p.lede { font-size: 16px; color: var(--muted); max-width: 620px; line-height: 1.75; margin-bottom: 32px; }
-  .hero-stats { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero-stats { display: flex; gap: 24px; flex-wrap: wrap; }
   .stat-card {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-    padding: 16px 24px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    min-width: 172px; background: linear-gradient(145deg, #ffffff, #eff6ff);
+    border: 1px solid #bfdbfe; border-top: 3px solid var(--accent); border-radius: 12px;
+    padding: 22px 30px; box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12);
   }
-  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: -1px; line-height: 1; }
-  .stat-card .label { font-size: 12px; color: var(--faint); margin-top: 4px; }
+  .stat-card .value { font-size: 32px; font-weight: 750; color: #1d4ed8; letter-spacing: -1px; line-height: 1.15; }
+  .stat-card .label { font-size: 14px; font-weight: 600; color: #475569; margin-top: 8px; }
+  @media (max-width: 1199px) { .hero h1 { white-space: normal; letter-spacing: -1.5px; } }
 
-  .section { max-width: 1100px; margin: 0 auto; padding: 48px 28px 8px; }
-  .section.body-map-section { max-width: 1280px; }
+  .section { width: var(--page-content-width); margin: 0 auto; padding: 48px 0 8px; }
   .section h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 6px; }
   .section > p.lede { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
 
@@ -109,7 +113,7 @@
 {% block content %}
 <div class="hero">
   <div class="hero-inner">
-    <h1>Explore QTL &amp; GWAS associations<br /><span class="accent">across tissues and datasets</span></h1>
+    <h1>LocusView：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
     <p class="lede">
       locusview is an interactive portal for publicly available quantitative trait loci (QTL) and
       GWAS data. Compare association signal across tissues and traits side by side, and search by
@@ -117,12 +121,20 @@
     </p>
     <div class="hero-stats">
       <div class="stat-card">
-        <div class="value">{{ n_datasets }}</div>
-        <div class="label">Dataset{{ 's' if n_datasets != 1 else '' }}</div>
+        <div class="value">{{ stats.datasets }}</div>
+        <div class="label">Datasets</div>
       </div>
       <div class="stat-card">
-        <div class="value">{{ n_tissues }}</div>
-        <div class="label">Tissues &amp; contexts</div>
+        <div class="value">{{ stats.qtl_types }}</div>
+        <div class="label">QTL types</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">{{ stats.contexts }}{% if stats.has_subcontexts %}+{% endif %}</div>
+        <div class="label">Contexts</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">{{ "{:,}".format(stats.associations) }}</div>
+        <div class="label">Associations</div>
       </div>
     </div>
   </div>
