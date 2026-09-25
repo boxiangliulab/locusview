@@ -31,6 +31,8 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Set the entire Home hero heading to white and retained its layered dark text shadow.
+  All 21 Home tests passed; deployed `locusview:white-title-20260925` and verified the public style.
 - Unified every part of the Home hero heading, including LocusView and the colon, in the
   existing subtitle color `#e3efff`. All 21 Home tests passed; deployed
   `locusview:hero-title-20260925` and verified the public Home heading style.
