@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Set the shared navigation bar and the Home hero above its divider to solid `#212161`, with
+  light brand, navigation, title, and description colors for readable contrast. The brand icon
+  follows the light accent. All 31 focused tests passed; deployed `locusview:nav-hero-navy-20260925`
+  and verified the four public pages.
 - Bumped locusview to v1.0 in package metadata and the shared application version; the header,
   footer, not-found page, health response, and CLI now use the same version. All 36 focused tests
   passed; deployed `locusview:v1.0-20260925` and verified the public header, footer, and health API.

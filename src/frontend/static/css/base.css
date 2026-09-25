@@ -44,8 +44,8 @@ code {
 /* ── Header / nav (shared by every page) ───────────────────────────────── */
 
 .site-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  background: #212161;
+  border-bottom: 1px solid #3f3f86;
   height: 56px;
   display: flex;
   align-items: center;
@@ -77,9 +77,9 @@ code {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  color: var(--ink);
+  color: #f8faff;
 }
-.site-header .brand span.accent { color: var(--accent); }
+.site-header .brand span.accent, .site-header .brand svg { color: #a9d0ff; }
 
 .site-nav { display: flex; align-items: center; gap: 8px; }
 .site-nav a {
@@ -87,17 +87,17 @@ code {
   border-radius: 6px;
   font-size: 15px;
   font-weight: 500;
-  color: var(--muted);
+  color: #d8dcf4;
   text-decoration: none;
 }
-.site-nav a:hover { color: var(--ink); text-decoration: none; }
-.site-nav a.active { color: var(--accent); background: var(--accent-soft); }
+.site-nav a:hover { color: #fff; background: #35357e; text-decoration: none; }
+.site-nav a.active { color: #fff; background: #45459a; }
 
 .site-header .version {
   position: absolute;
   right: 28px;
   font-size: 11px;
-  color: var(--faint);
+  color: #bdc7e9;
   font-family: var(--mono);
   flex-shrink: 0;
 }
