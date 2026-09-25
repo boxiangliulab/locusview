@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Made the four Home statistic cards stand out against the navy hero with a clearer border,
+  light-blue top rule, solid pale surface, and stronger drop shadow. All 21 Home tests passed;
+  deployed `locusview:card-contrast-20260925` and verified the public card styles.
 - Added subtle downward text shadows to the header brand, Home heading, and the values and labels
   in all four Home statistics cards. All 21 Home tests passed; deployed
   `locusview:text-shadow-20260925` and verified the public styles.
