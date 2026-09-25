@@ -78,7 +78,6 @@ code {
   font-weight: 700;
   letter-spacing: 0.2px;
   color: #f8faff;
-  text-shadow: 0 0 9px rgba(255, 255, 255, 0.42), 0 0 18px rgba(169, 208, 255, 0.24);
 }
 .site-header .brand span.accent, .site-header .brand svg { color: #e3efff; }
 

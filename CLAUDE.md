@@ -31,6 +31,8 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Removed the text glow from the header brand and Home heading while retaining their spacing
+  and high-contrast colors. Deployed `locusview:no-glow-20260925` and verified both public styles.
 - Loosened letter spacing on the LocusView brand and Home heading, added a subtle text glow, and
   switched blue text and links on light surfaces to the new `#212161` theme color. On the navy
   header and hero, the brand and heading use brighter text for contrast. All 83 focused tests
