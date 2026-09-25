@@ -56,7 +56,20 @@ code {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
+/* Reserve the brand's original space so the navigation links stay in place. */
+.site-header::before {
+  content: "LocusView";
+  padding-left: 32px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  visibility: hidden;
+  flex-shrink: 0;
+}
+
 .site-header .brand {
+  position: absolute;
+  left: max(16px, min(15%, calc((100% - 900px) / 2)));
   display: flex;
   align-items: center;
   gap: 10px;
@@ -90,8 +103,9 @@ code {
 }
 
 @media (max-width: 860px) {
-  .site-header { height: auto; min-height: 56px; flex-wrap: wrap; gap: 6px 12px; padding: 10px 16px; }
-  .site-header .brand { width: 100%; justify-content: center; }
+  .site-header { height: auto; min-height: 56px; flex-wrap: wrap; justify-content: flex-start; gap: 6px 12px; padding: 10px 16px; }
+  .site-header::before { display: none; }
+  .site-header .brand { position: static; }
   .site-nav { order: 2; width: 100%; justify-content: center; flex-wrap: wrap; }
   .site-header .version { top: 18px; right: 16px; }
 }

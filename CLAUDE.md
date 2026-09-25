@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Aligned the LocusView header brand with the shared content column's left edge, while preserving
+  the centered navigation links' positions. All 31 focused tests passed; deployed
+  `locusview:brand-align-20260925` and verified the public pages.
 - Centered the shared top navigation group, slightly enlarged its brand and page links, and let
   links wrap onto a second row on narrow screens. Enlarged Tutorial's step, table, API, and code text.
   All 64 focused tests passed; deployed `locusview:nav-tutorial-20260925` and verified the public
