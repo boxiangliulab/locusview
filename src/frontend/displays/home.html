@@ -9,10 +9,11 @@
   }
   .hero-inner { width: var(--page-content-width); margin: 0 auto; text-align: left; }
   .hero h1 {
-    font-size: clamp(28px, 2.45vw, 44px); font-weight: 700; letter-spacing: -2.8px;
-    line-height: 1.2; margin: 0 0 22px; white-space: nowrap; color: #f8faff;
+    font-size: clamp(28px, 2.25vw, 40px); font-weight: 700; letter-spacing: -0.4px;
+    line-height: 1.2; margin: 0 0 22px; white-space: nowrap; color: #fff;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.32), 0 0 26px rgba(169, 208, 255, 0.2);
   }
-  .hero h1 .accent { color: #a9d0ff; }
+  .hero h1 .accent { color: #e3efff; }
   .hero p.lede { font-size: 16px; color: #dee5ff; line-height: 1.75; margin-bottom: 32px; }
   .hero-stats { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
   .stat-card {
@@ -20,9 +21,9 @@
     border: 1px solid #bfdbfe; border-top: 3px solid var(--accent); border-radius: 12px;
     padding: 22px 30px; box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12);
   }
-  .stat-card .value { font-size: 32px; font-weight: 750; color: #1d4ed8; letter-spacing: -1px; line-height: 1.15; }
+  .stat-card .value { font-size: 32px; font-weight: 750; color: var(--accent); letter-spacing: -1px; line-height: 1.15; }
   .stat-card .label { font-size: 14px; font-weight: 600; color: #475569; margin-top: 8px; }
-  @media (max-width: 1199px) { .hero h1 { white-space: normal; letter-spacing: -1.5px; } }
+  @media (max-width: 1199px) { .hero h1 { white-space: normal; letter-spacing: 0.2px; } }
 
   .section { width: var(--page-content-width); margin: 0 auto; padding: 48px 0 8px; }
   .section h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 6px; }
@@ -109,7 +110,7 @@
     padding: 16px 20px; display: flex; gap: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   }
   .citation-index {
-    background: var(--accent-soft); color: #1d4ed8; padding: 4px 10px; border-radius: 5px;
+    background: var(--accent-soft); color: var(--accent); padding: 4px 10px; border-radius: 5px;
     font-size: 12px; font-weight: 700; flex-shrink: 0; height: fit-content;
   }
   .citation-text { font-size: 13.5px; color: #475569; line-height: 1.65; }

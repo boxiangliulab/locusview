@@ -31,6 +31,10 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Loosened letter spacing on the LocusView brand and Home heading, added a subtle text glow, and
+  switched blue text and links on light surfaces to the new `#212161` theme color. On the navy
+  header and hero, the brand and heading use brighter text for contrast. All 83 focused tests
+  passed; deployed `locusview:glow-navy-accent-20260925` and verified five public pages.
 - Set the shared navigation bar and the Home hero above its divider to solid `#212161`, with
   light brand, navigation, title, and description colors for readable contrast. The brand icon
   follows the light accent. All 31 focused tests passed; deployed `locusview:nav-hero-navy-20260925`
