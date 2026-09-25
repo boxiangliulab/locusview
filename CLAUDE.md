@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Centered the four Home statistics cards as a group within the page, leaving the hero heading
+  and description left-aligned in their existing positions. All 21 Home tests passed; deployed
+  `locusview:stats-center-20260925` and verified the public Home page.
 - Aligned the LocusView header brand with the shared content column's left edge, while preserving
   the centered navigation links' positions. All 31 focused tests passed; deployed
   `locusview:brand-align-20260925` and verified the public pages.
