@@ -31,6 +31,9 @@ Keep it current. The live "where we are right now" lives in
   the public `/tutorial` page returns the new content.
 
 ## Work log — 2026-09-25
+- Unified every part of the Home hero heading, including LocusView and the colon, in the
+  existing subtitle color `#e3efff`. All 21 Home tests passed; deployed
+  `locusview:hero-title-20260925` and verified the public Home heading style.
 - Replaced the earlier navy blue UI theme with `#015A84` on the navigation, Home hero,
   action buttons, QTL badges, available body-map tissues, and QTL plot tracks. Shifted pale
   blue surfaces and borders to matching soft teal while retaining `#4750DD` content links.
