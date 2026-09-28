@@ -1,0 +1,4 @@
+interface:
+  display_name: "QTL Record Verifier"
+  short_description: "One dataset per row, earliest paper, working download URL"
+  default_prompt: "Use $qtl-record-verifier on the qtlliteraturereview table: deduplicate to one row per dataset keeping the earliest paper, check every download URL, and give every row a decision."

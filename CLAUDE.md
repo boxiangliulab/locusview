@@ -4,6 +4,143 @@ Orientation for any Claude Code session (local, cloud, or a teammate's) and for 
 Keep it current. The live "where we are right now" lives in
 [docs/process/status.md](docs/process/status.md).
 
+## Work log — 2026-09-24
+- Restored the local PostgreSQL container after an unexpected shutdown. Docker had failed to mount
+  its data directory at boot; once the mount was available, PostgreSQL completed crash recovery.
+  Both public frontends then returned HTTP 200: locusview on port 33245 and LocusCompare 2 on
+  port 33244.
+- Moved **Search data** ahead of **Data Browser** in the site navigation. Each QTL phenotype in
+  the Search data table now links to Data Browser with its exact `qtl:<dataset_id>` context,
+  gene or variant locus, and URL-encoded phenotype ID. Data Browser runs the linked query on
+  arrival, selects that phenotype, and loads its LocusZoom plot. If the phenotype is outside the
+  initial 50-row summary, the linked row is added so it can still be plotted. GWAS rows have no
+  phenotype link.
+- Deployed the change in the `locusview:search-data-20260924` Docker image. Verified the public
+  Search data and Data Browser pages, a real TP53 phenotype link, and the phenotype-variant API.
+  The full test run had 314 passes and one existing failure in
+  `tests/test_qtl_data_agent.py::test_reads_selected_skill` (its expected skill text differs from
+  the current skill file); coverage was 97.29%. JavaScript syntax and `git diff --check` passed.
+- Updated each Data Browser QTL LocusZoom panel header: the blue badge shows the track's actual
+  `qtl_type` (for example `sQTL`), and the title shows `source_project_id — context — phenotype`.
+  GWAS panel headers are unchanged. Deployed as `locusview:plot-title-20260924`; the public
+  browser and updated JavaScript returned HTTP 200, and live track metadata supplied all three
+  requested fields.
+- Updated the Tutorial to teach the Search data → phenotype link → Data Browser plot path, while
+  retaining instructions for direct region and multi-dataset browsing and the Search data JSON
+  API. All seven Tutorial tests passed; deployed as `locusview:tutorial-20260924` and verified
+  the public `/tutorial` page returns the new content.
+
+## Work log — 2026-09-25
+- Added optional `median_tpm` to `/api/search-data` QTL phenotype rows for gene and variant
+  searches. The value comes from the phenotype companion table; a stored zero is included,
+  and the key is omitted when the value or column is absent. The live database currently has
+  64 phenotype tables with the column out of 167 total, so the query handles both layouts.
+  All 98 focused tests, Ruff, and mypy passed. Deployed `locusview:median-tpm-api-20260925`;
+  public gene and variant API queries for qtl:154 both returned `median_tpm: 183.989`, while a
+  qtl:1 query without the column succeeded and omitted the key.
+  The full test run had 317 passes and the existing `test_reads_selected_skill` assertion failure.
+- Matched content-link text to the `#015A84` theme color across Home, Search data,
+  Data browser, Tutorial, and News. Navigation links stay light against the teal header.
+  Deployed `locusview:teal-links-20260925` and verified the public stylesheet and Home page.
+- Set the entire Home hero heading to white and retained its layered dark text shadow.
+  All 21 Home tests passed; deployed `locusview:white-title-20260925` and verified the public style.
+- Unified every part of the Home hero heading, including LocusView and the colon, in the
+  existing subtitle color `#e3efff`. All 21 Home tests passed; deployed
+  `locusview:hero-title-20260925` and verified the public Home heading style.
+- Replaced the earlier navy blue UI theme with `#015A84` on the navigation, Home hero,
+  action buttons, QTL badges, available body-map tissues, and QTL plot tracks. Shifted pale
+  blue surfaces and borders to matching soft teal while retaining `#4750DD` content links.
+  All 83 focused page tests and both plot-script syntax checks passed; deployed
+  `locusview:teal-20260925` and verified the public Home, Search data, and Data browser pages.
+- Standardized visible page labels and headings to sentence case while retaining product names
+  and scientific acronyms. Set the Home heading's LocusView text to `#F1EDEA`.
+  Replaced the GTEx citation with the verified LocusCompare (2019) and LocusCompare2 (2025)
+  papers and linked both DOIs. Refreshed News with the Search data plot links, live Home counts,
+  and tissue map, and removed its obsolete upcoming tissue-map item.
+  All 83 focused page tests passed, as did Ruff and `git diff --check`. The full test run had
+  317 passes and the existing `test_reads_selected_skill` failure. Deployed
+  `locusview:copy-citations-news-20260925` and verified the public Home and News pages.
+- Extended the `#072684` theme to action buttons, the Home statistics and available body-map
+  tissues, QTL badges, and QTL plot tracks. Unavailable tissues remain gray and content links
+  retain the requested `#4750DD`. All 73 focused tests and both plot-script syntax checks passed;
+  deployed `locusview:blue-accents-20260925` and verified the public pages and scripts.
+- Changed the shared navigation and Home hero backgrounds to `#072684`, with coordinated nav
+  hover/active backgrounds and divider lines. Text and content-link colors remain as configured.
+  All 21 Home tests passed; deployed `locusview:blue-bg-20260925` and verified four public pages.
+- Expanded the Home introduction to explain cross-context QTL/GWAS exploration, LocusZoom plots,
+  and API use; strengthened its heading's downward shadow. Set content links to `#4750DD` while
+  keeping high-contrast navigation links light on the navy header. All 83 focused tests passed;
+  deployed `locusview:home-copy-links-20260925` and verified five public pages.
+- Made the four Home statistic cards stand out against the navy hero with a clearer border,
+  light-blue top rule, solid pale surface, and stronger drop shadow. All 21 Home tests passed;
+  deployed `locusview:card-contrast-20260925` and verified the public card styles.
+- Added subtle downward text shadows to the header brand, Home heading, and the values and labels
+  in all four Home statistics cards. All 21 Home tests passed; deployed
+  `locusview:text-shadow-20260925` and verified the public styles.
+- Removed the text glow from the header brand and Home heading while retaining their spacing
+  and high-contrast colors. Deployed `locusview:no-glow-20260925` and verified both public styles.
+- Loosened letter spacing on the LocusView brand and Home heading, added a subtle text glow, and
+  switched blue text and links on light surfaces to the new `#212161` theme color. On the navy
+  header and hero, the brand and heading use brighter text for contrast. All 83 focused tests
+  passed; deployed `locusview:glow-navy-accent-20260925` and verified five public pages.
+- Set the shared navigation bar and the Home hero above its divider to solid `#212161`, with
+  light brand, navigation, title, and description colors for readable contrast. The brand icon
+  follows the light accent. All 31 focused tests passed; deployed `locusview:nav-hero-navy-20260925`
+  and verified the four public pages.
+- Bumped locusview to v1.0 in package metadata and the shared application version; the header,
+  footer, not-found page, health response, and CLI now use the same version. All 36 focused tests
+  passed; deployed `locusview:v1.0-20260925` and verified the public header, footer, and health API.
+- Added a space between the Home Associations number and `M+`, and removed the hero description's
+  620px width cap so it wraps naturally across the shared content column. Verified both on the
+  public Home page.
+- Centered all non-first columns in the Home Available QTL and GWAS tables; Dataset and Trait
+  remain left-aligned, and the body-map result table keeps its existing alignment. Verified the
+  public Home page serves the new table alignment rule.
+- Shortened the Home Associations card to whole millions plus a trailing `M+`; the unabridged
+  current count remains available on hover. All 21 Home tests passed; deployed
+  `locusview:assoc-millions-20260925` and verified the public Home card.
+- Centered the four Home statistics cards as a group within the page, leaving the hero heading
+  and description left-aligned in their existing positions. All 21 Home tests passed; deployed
+  `locusview:stats-center-20260925` and verified the public Home page.
+- Aligned the LocusView header brand with the shared content column's left edge, while preserving
+  the centered navigation links' positions. All 31 focused tests passed; deployed
+  `locusview:brand-align-20260925` and verified the public pages.
+- Centered the shared top navigation group, slightly enlarged its brand and page links, and let
+  links wrap onto a second row on narrow screens. Enlarged Tutorial's step, table, API, and code text.
+  All 64 focused tests passed; deployed `locusview:nav-tutorial-20260925` and verified the public
+  Home, Search data, Data Browser, Tutorial, and News pages.
+- Made variant Search data results span the same full content width as gene results. The missing
+  Lead SNP and Variant column space now goes to Phenotype, while other shared columns keep their widths.
+  All 33 Search data tests passed; deployed `locusview:search-width-20260925` and confirmed public
+  TP53 and rs1042522 result cards are both 100% wide.
+- Set the shared Home, Search data, Tutorial, and News content column to 70% on wide screens;
+  it expands smoothly toward the available width on narrow screens, keeping 16px side margins.
+  The Home body map's side panel now stacks within the column on small screens. All 31 focused
+  page tests passed; deployed `locusview:width70-20260925` and verified all four public pages.
+- Deepened the Home hero's blue background above the divider and centered its content vertically
+  while keeping the heading, description, and statistics left-aligned within the page column.
+  All 21 Home tests passed; deployed `locusview:hero-20260925` and verified the public Home page.
+- Enlarged the page titles on Home, Search data, Tutorial, and News. The Home heading now reads
+  "LocusView：Explore QTL associations across cell types and tissues" on one line at desktop
+  widths. Increased spacing, padding, type size, border emphasis, and shadow on its four live
+  statistic cards. Checked desktop and mobile layouts; 31 focused page tests passed. Deployed
+  `locusview:titles-20260925` and confirmed all four public pages return HTTP 200.
+- Matched the Home, Search data, Tutorial, and News content columns to the Search data page's
+  80% viewport width, with 16px side margins on narrow screens. Updated the Home hero to
+  "Explore QTL associations across cell types and tissues".
+- Home now shows four live QTL statistics: all `qtl_lists` rows, distinct
+  `qtl_datasets.qtl_type` values, distinct `qtl_contexts.level_1_context` values with `+` when
+  level 2 contexts exist, and association rows across the physical `qtl_snp_<id>` tables.
+  Association counts use each append-only shard's `id` sequence so Home does not scan roughly
+  9 TB of QTL data on every request. All 151 sequences matched their shard's `max(id)`;
+  an exact `count(*)` spot check also matched its sequence. In-progress or failed transactions
+  can temporarily advance a sequence ahead of committed rows.
+- Deployed `locusview:home-stats-20260925`; the public Home, Search data, Tutorial, and News pages
+  returned HTTP 200. At verification, Home showed 151 datasets, 3 QTL types, 51+ contexts,
+  and a growing association count. Targeted tests, Ruff on modified code, and mypy passed.
+  Full pytest had 317 passes and the existing `test_reads_selected_skill` failure in
+  `tests/test_qtl_data_agent.py`.
+
 ## What this is
 locusview aggregates publicly available **QTL** (quantitative trait locus) data and lets users
 **search, browse, and download** it. It is built by Boxiang Liu's lab **and** is a graduate-level
@@ -12,9 +149,13 @@ software-engineering teaching example — so docs, ADRs, and PR history are firs
 - Repo: <https://github.com/boxiangliulab/locusview> · Board: <https://github.com/orgs/boxiangliulab/projects/5>
 
 ## Stack
-Python 3.11+ · **uv** (env/deps) · **FastAPI + Jinja2 + HTMX** (no JS build chain) · **pymysql** to the
-shared **locuscompare2 MySQL** database (ADR-0008) · Ruff + mypy (strict) + pytest. Storage is the
-shared DB, **not** a locusview-owned store (ADR-0008 supersedes the earlier Parquet/DuckDB plan).
+Python 3.11+ · **uv** (env/deps) · **FastAPI + Jinja2 + HTMX** (no JS build chain) · **pg8000** to the
+shared **locuscompare2 Postgres** database · Ruff + mypy (strict) + pytest. Storage is the shared DB,
+**not** a locusview-owned store (ADR-0008 supersedes the earlier Parquet/DuckDB plan).
+ADR-0008 named a **MySQL** DB; the team replaced it with Postgres in 2026-08 — see the "Database
+switch note" in [docs/process/status.md](docs/process/status.md). `pymysql` is still a declared
+dependency but is unused by default (the MySQL `LocuscompareRepository` is commented out, not
+deleted).
 
 ## Run it
 ```bash
@@ -23,8 +164,10 @@ uv run pytest                            # tests — must stay green (90% covera
 uv run ruff check . && uv run mypy       # lint + types (strict)
 uv run locusview serve                   # web app on http://127.0.0.1:8000
 ```
-Data access needs `LOCUSCOMPARE2_DB_*` env vars (a read-only account). The public read-only **test**
-credentials + host are documented in
+Data access needs `LOCUSCOMPARE2_PG_*` env vars (the Postgres DB — `LOCUSCOMPARE2_DB_*` is the
+superseded MySQL naming, see ADR-0008's update in `docs/process/status.md`). Connect **directly**
+to the server on port **15432** (the server's compose publishes `15432:5432`); no SSH tunnel is
+needed. Host + credentials are documented in
 [docs/how-to/connect-to-locuscompare2-database.md](docs/how-to/connect-to-locuscompare2-database.md);
 the password is never committed. For **cloud** Claude Code sessions, allowlist the DB host so the VM
 can reach it.
@@ -40,15 +183,30 @@ can reach it.
   [docs/process/agent-workflow.md](docs/process/agent-workflow.md).
 
 ## Code conventions
-- Read QTL data through the **`QtlRepository`** Protocol (`src/locusview/repository.py`):
-  `FakeQtlRepository` for hermetic tests, `LocuscompareRepository` for the real DB. **Program to the
-  interface; keep CI hermetic (no network in tests)** — the real DB is exercised only in ad-hoc checks.
+- **Layout (2026-08):** backend Python lives under `src/backend/locusview/` (the `locusview`
+  package — `routers/`, the data-access layer (`requestinfo.py` = the `QtlRepository` interface +
+  fake; `connectpostgres.py` = the real Postgres implementation), `web.py`); HTML templates and
+  static assets live in the sibling `src/frontend/` (`displays/`, `static/`), not inside the
+  package — see `web.py`'s `_STATIC_DIR` comment for how the two find each other at runtime.
+- Read QTL data through the **`QtlRepository`** Protocol (`src/backend/locusview/requestinfo.py`):
+  `FakeQtlRepository` for hermetic tests, **`PostgresQtlRepository`** (`connectpostgres.py`) for the
+  real DB. **Program to the interface; keep CI hermetic (no network in tests)** — the real DB is
+  exercised only in ad-hoc checks. (The MySQL-era `LocuscompareRepository` is commented out in
+  `requestinfo.py`, not live code.)
 - DB keys are integer-encoded: `gene_id` = the ENSG number (`ENSG00000141510` → `141510`), `rs_id` =
-  rsID minus `rs`. Data lives in per-tissue `eqtl_snp_{dataset_id}` shards + the `eqtl_raw` catalog;
-  gene coords in `gencode_v26_hg38`. **The shards have no effect allele / MAF → do not present β
-  *direction*** (issue #18).
-- Docs use **Diátaxis** (tutorials/how-to/reference/explanation) + ADRs in `docs/adr/`. Design specs in
-  `docs/design/` and web templates are owned by the UI/UX designer (see `CODEOWNERS`).
+  rsID minus `rs`. Data lives in per-(dataset × context) `qtl_snp_{qtl_lists.id}` shards (+ a
+  `qtl_snp_{id}_phenotype` companion) behind the `qtl_datasets` → `qtl_lists` → `qtl_contexts`
+  catalog; GWAS mirrors this as `gwas_datasets` → `gwas_lists` → `gwas_snp_{id}`. Gene coords are in
+  `gencode_v39`, rsIDs in `variant_rsid_mapping_raw`, LD in `tkg_p3v5a_ld_chr{chrom}_{population}`.
+  See `connectpostgres.py`'s module docstring for the full schema.
+- **β direction (issue #18) is interpretable on the current DB** — the `qtl_snp_*` shards do carry
+  `ref`/`alt`/`maf` (verified live). The old "no effect allele → don't present β direction" rule
+  applied to the superseded MySQL `eqtl_snp_*` shards only.
+- Docs use **Diátaxis** (tutorials/how-to/reference/explanation) + ADRs in `docs/adr/`. Design specs
+  live in `docs/design/` and the UI/UX designer (@liufei-f) is their author — but note `CODEOWNERS`
+  does **not** currently encode that: it assigns all of `/src/` (backend *and* `src/frontend/`) to
+  the three engineers, and has no entry for `docs/design/`. Add one if designer review should be
+  enforced on frontend/design changes.
 
 ## Where knowledge lives (the repo is the source of truth)
 Decisions → `docs/adr/` · designs → `docs/design/` · process → `docs/process/` · current state &
