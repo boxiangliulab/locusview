@@ -121,23 +121,26 @@ def test_home_no_gwas_datasets_configured() -> None:
     assert "No GWAS datasets configured" in response.text
 
 
-def test_home_dataset_count_uses_qtl_lists_only() -> None:
+def test_home_datasources_card_uses_repository_count() -> None:
     response = _client(
         datasets=[Dataset(1, "Whole_Blood", "GTEx_v10-eQTL-ALL")],
         gwas_datasets=[GwasDataset(1, "Basophil_count", "EUR", "GWAS Catalog", "GCST90002379")],
     ).get("/")
-    assert '<div class="value">1</div>\n        <div class="label">Datasets</div>' in response.text
+    assert (
+        '<div class="value">1</div>\n        <div class="label">Datasources</div>'
+        in response.text
+    )
 
 
-def test_home_stats_show_catalog_counts_and_context_plus() -> None:
-    response = _client(catalog_stats=CatalogStats(151, 3, 51, True, 54_992_778_751)).get("/")
+def test_home_stats_show_publications_tissues_and_cell_types() -> None:
+    response = _client(catalog_stats=CatalogStats(32, 55, 117, 54_992_778_751)).get("/")
     assert (
         '<span class="brand-name">LocusView</span>：<span class="accent">'
         'Explore QTL associations across cell types and tissues</span>'
     ) in response.text
     for value, label in (
-        ("151", "Datasets"), ("3", "QTL types"),
-        ("51+", "Contexts"),
+        ("32", "Datasources"), ("55", "Tissue / sample contexts"),
+        ("117", "Cell type / other subcontexts"),
     ):
         card = f'<div class="value">{value}</div>\n        <div class="label">{label}</div>'
         assert card in response.text
@@ -145,6 +148,25 @@ def test_home_stats_show_catalog_counts_and_context_plus() -> None:
         '<div class="value" title="54,992,778,751 associations">54992 M+</div>\n'
         '        <div class="label">Associations</div>'
     ) in response.text
+
+
+def test_home_context_counts_distinguish_tissues_from_cell_types() -> None:
+    contexts = [
+        QtlContextEntry(1, "Blood", None, "GTEx-eQTL"),
+        QtlContextEntry(2, "Blood", "B_naive", "TenK10K-caQTL"),
+        QtlContextEntry(3, "Blood", "B_naive", "CIMA-caQTL"),
+        QtlContextEntry(4, "Brain", "  ", "GTEx-eQTL"),
+        QtlContextEntry(5, "Brain", "Neuron", "Study-sQTL"),
+    ]
+    html = _client(qtl_contexts=contexts).get("/").text
+    assert (
+        '<div class="value">2</div>\n        <div class="label">Tissue / sample contexts</div>'
+        in html
+    )
+    assert (
+        '<div class="value">2</div>\n        <div class="label">Cell type / other subcontexts</div>'
+        in html
+    )
 
 
 # ── Body map ─────────────────────────────────────────────────────────────────

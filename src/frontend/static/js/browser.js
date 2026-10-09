@@ -234,7 +234,7 @@
       MultiTrackPlot.renderQtlTable(qtlTableEl, data.tracks, (selected) => {
         MultiTrackPlot.renderQtlPanels(
           qtlPanelsEl, data.region, selected, onPointClick, qtlLdLegendEl, populationSel.value,
-          data.query_variant
+          data.query_variant, p.locus_mode
         );
       }, linkedTrack ? { key: linkedKey, phenotype: linkedPhenotype } : null);
       // Only swap the sidebar for the table when QTL datasets were queried (GWAS-only queries

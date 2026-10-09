@@ -254,6 +254,13 @@ class PostgresQtlRepository:
                 # them to the repository boundary the HTTP routes already handle; never reuse a
                 # connection whose protocol stream may now be out of sync.
                 raise RepositoryTimeoutError("database query timed out") from exc
+            except Exception as exc:
+                # PostgreSQL's statement_timeout arrives through pg8000 as a database error
+                # (SQLSTATE 57014), not as a Python TimeoutError.
+                detail = exc.args[0] if exc.args else None
+                if isinstance(detail, dict) and detail.get("C") == "57014":
+                    raise RepositoryTimeoutError("database query timed out") from exc
+                raise
         finally:
             conn.close()
 
@@ -267,11 +274,12 @@ class PostgresQtlRepository:
         """
         row = self._query(
             "SELECT "
-            "(SELECT count(*) FROM qtl_lists), "
-            "(SELECT count(DISTINCT qtl_type) FROM qtl_datasets), "
-            "(SELECT count(DISTINCT level_1_context) FROM qtl_contexts), "
-            "(SELECT EXISTS (SELECT 1 FROM qtl_contexts "
-            "WHERE nullif(trim(level_2_context), '') IS NOT NULL)), "
+            "(SELECT count(DISTINCT nullif(trim(publication), '')) FROM qtl_lists), "
+            "(SELECT count(DISTINCT level_1_context) FROM qtl_contexts "
+            "WHERE nullif(trim(level_1_context), '') IS NOT NULL "
+            "AND nullif(trim(level_2_context), '') IS NULL), "
+            "(SELECT count(DISTINCT nullif(trim(level_2_context), '')) "
+            "FROM qtl_contexts), "
             "(SELECT coalesce(sum(last_value), 0) FROM pg_sequences "
             "WHERE schemaname = 'public' "
             "AND sequencename ~ '^qtl_snp_[0-9]+_id_seq$' "
@@ -280,11 +288,10 @@ class PostgresQtlRepository:
             (),
         )[0]
         return CatalogStats(
-            datasets=int(row[0]),
-            qtl_types=int(row[1]),
-            contexts=int(row[2]),
-            has_subcontexts=bool(row[3]),
-            associations=int(row[4]),
+            publications=int(row[0]),
+            tissues=int(row[1]),
+            cell_types=int(row[2]),
+            associations=int(row[3]),
         )
 
     def datasets(self) -> list[Dataset]:
@@ -842,16 +849,22 @@ class PostgresQtlRepository:
         phenotype_key, gene_id_raw = key_rows[0]
         gene_id = _to_int(gene_id_raw) or 0
         rows = self._query(
+            # Materialize the phenotype first. On large shards Postgres otherwise combines the
+            # phenotype index with a region-wide bitmap (millions of entries), timing out even
+            # when this phenotype has only a few thousand variants.
+            f"WITH phenotype_rows AS MATERIALIZED ("
+            f"SELECT chrom, position, pval, beta, se, ref, alt FROM {shard} "
+            f"WHERE phenotype_key = %s) "
             f"SELECT s.chrom, s.position, s.pval, s.beta, s.se, s.ref, s.alt, "
             f"COALESCE(v.rsid, vr.rsid) "
-            f"FROM {shard} s "
+            f"FROM phenotype_rows s "
             f"LEFT JOIN variant_rsid_mapping_raw v "
             f"ON v.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.ref || '_' "
             f"|| s.alt "
             f"LEFT JOIN variant_rsid_mapping_raw vr "
             f"ON vr.variant_id = 'chr' || s.chrom || '_' || s.position || '_' || s.alt || '_' "
             f"|| s.ref "
-            f"WHERE s.phenotype_key = %s AND s.chrom = %s "
+            f"WHERE s.chrom = %s "
             f"AND s.position BETWEEN %s AND %s",
             (phenotype_key, chrom, start, end),
         )

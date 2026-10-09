@@ -47,10 +47,9 @@ class RepositoryTimeoutError(RuntimeError):
 class CatalogStats:
     """Home-page QTL counts from the shared catalog and association shards."""
 
-    datasets: int
-    qtl_types: int
-    contexts: int
-    has_subcontexts: bool
+    publications: int
+    tissues: int
+    cell_types: int
     associations: int
 
 
@@ -206,7 +205,7 @@ class QtlRepository(Protocol):
         ...
 
     def catalog_stats(self) -> CatalogStats:
-        """Return QTL list, type, context, and association counts for Home."""
+        """Return publication, tissue, cell-type, and association counts for Home."""
         ...
 
     def resolve_gene(self, symbol_or_ensembl: str) -> Gene | None:
@@ -496,10 +495,12 @@ class FakeQtlRepository:
         if self._catalog_stats is not None:
             return self._catalog_stats
         return CatalogStats(
-            datasets=len(self._datasets),
-            qtl_types=len({dataset.catalog_parts[1] for dataset in self._datasets}),
-            contexts=len({context.level_1 for context in self._qtl_contexts}),
-            has_subcontexts=any(context.level_2 for context in self._qtl_contexts),
+            # Fake datasets have no publication metadata; count distinct source labels here.
+            publications=len({dataset.source for dataset in self._datasets}),
+            tissues=len({context.level_1 for context in self._qtl_contexts
+                         if context.level_1 and not (context.level_2 or '').strip()}),
+            cell_types=len({context.level_2.strip() for context in self._qtl_contexts
+                            if context.level_2 and context.level_2.strip()}),
             associations=len(self._associations),
         )
 

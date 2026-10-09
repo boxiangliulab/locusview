@@ -4,7 +4,7 @@
 > For durable *decisions* see [`../adr/`](../adr/); for *how we work* see the other
 > [`process/`](.) docs; for the roadmap see [`../product/roadmap.md`](../product/roadmap.md).
 >
-> _Last updated: 2026-08 (see `git log` for precise dates)._
+> _Last updated: 2026-09 (see `git log` for precise dates)._
 
 ## Phase
 **Phase 1 — thin vertical MVP**, now extended with a full Data Browser app shell (see "Scope note"
@@ -83,6 +83,12 @@ points at the new Postgres DB (`PostgresQtlRepository`) by default; the old
   went 2224 ms / 924k buffers -> 0.244 ms / 11 buffers. Ordering is now by position, so the QTL
   results table says "showing the first 50 in this window", not "top 50 by significance" (these
   summaries carry no p-value — values load when a row is checked).
+- **Region/variant phenotype plots expanded (2026-09-30).** Checking a phenotype now fetches its
+  variants from the search center +/-2 Mb, and the QTL plot widens with the displayed span so
+  points are not compressed. On large shards, the per-phenotype SQL materializes rows from the
+  phenotype index before applying position bounds; this avoids the planner's slow intersection
+  with the much larger region index. PostgreSQL statement timeouts now return a 503 response
+  rather than an uncaught 500.
 - Password for the new DB lives in local `.env` (gitignored) — not yet in a secret store; do that
   before any real deployment (mirror how `LOCUSCOMPARE2_DB_PASSWORD` was handled for MySQL).
 

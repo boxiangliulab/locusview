@@ -69,14 +69,15 @@ def test_postgres_connection_factory_returns_callable() -> None:
 
 
 def test_catalog_stats_reads_live_catalog_and_shard_sequences() -> None:
-    factory, log = _factory([(151, 3, 51, True, 54_992_778_751)])
+    factory, log = _factory([(32, 55, 117, 54_992_778_751)])
     assert PostgresQtlRepository(factory).catalog_stats() == CatalogStats(
-        151, 3, 51, True, 54_992_778_751
+        32, 55, 117, 54_992_778_751
     )
     sql, params = log[0]
-    assert "count(*) FROM qtl_lists" in sql
-    assert "count(DISTINCT qtl_type) FROM qtl_datasets" in sql
+    assert "count(DISTINCT nullif(trim(publication), '')) FROM qtl_lists" in sql
     assert "count(DISTINCT level_1_context) FROM qtl_contexts" in sql
+    assert "AND nullif(trim(level_2_context), '') IS NULL" in sql
+    assert "count(DISTINCT nullif(trim(level_2_context), ''))" in sql
     assert "pg_sequences" in sql
     assert params == ()
 
@@ -146,6 +147,26 @@ def test_socket_timeout_is_translated_and_connection_is_closed() -> None:
     class TimeoutCursor:
         def execute(self, sql: str, params: Sequence[Any] = ()) -> None:
             raise TimeoutError("socket read timed out")
+
+    class TimeoutConnection:
+        closed = False
+
+        def cursor(self) -> TimeoutCursor:
+            return TimeoutCursor()
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = TimeoutConnection()
+    with pytest.raises(RepositoryTimeoutError):
+        PostgresQtlRepository(lambda: connection).datasets()
+    assert connection.closed is True
+
+
+def test_statement_timeout_is_translated_and_connection_is_closed() -> None:
+    class TimeoutCursor:
+        def execute(self, sql: str, params: Sequence[Any] = ()) -> None:
+            raise RuntimeError({"C": "57014", "M": "canceling statement due to statement timeout"})
 
     class TimeoutConnection:
         closed = False
@@ -403,6 +424,8 @@ def test_associations_for_phenotype_resolves_key_then_fetches_bounded_window() -
             return [(7791, "141510")]
         if "phenotype_key = %s" in sql:
             assert params == (7791, "17", 7_660_000, 7_690_000)
+            assert "WITH phenotype_rows AS MATERIALIZED" in sql
+            assert "FROM phenotype_rows s" in sql
             assert "s.chrom = %s" in sql and "s.position BETWEEN %s AND %s" in sql
             return [("17", 7670000, "0.001", "0.2", "0.05", "C", "T", "rs123")]
         raise AssertionError(f"unexpected query: {sql}")

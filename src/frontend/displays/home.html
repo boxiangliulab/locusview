@@ -123,16 +123,16 @@
     <p class="lede">LocusView brings publicly available quantitative trait loci (QTL) and GWAS data together in one interactive portal. Explore how genetic variants relate to molecular phenotypes across tissues and cell types, and compare association signals across datasets and traits. Search for a gene or variant, browse a genomic region, and open LocusZoom plots to inspect the associations behind each result. You can also retrieve Search data results through the API for further analysis.</p>
     <div class="hero-stats">
       <div class="stat-card">
-        <div class="value">{{ stats.datasets }}</div>
-        <div class="label">Datasets</div>
+        <div class="value">{{ stats.publications }}</div>
+        <div class="label">Datasources</div>
       </div>
       <div class="stat-card">
-        <div class="value">{{ stats.qtl_types }}</div>
-        <div class="label">QTL types</div>
+        <div class="value">{{ stats.tissues }}</div>
+        <div class="label">Tissue / sample contexts</div>
       </div>
       <div class="stat-card">
-        <div class="value">{{ stats.contexts }}{% if stats.has_subcontexts %}+{% endif %}</div>
-        <div class="label">Contexts</div>
+        <div class="value">{{ stats.cell_types }}</div>
+        <div class="label">Cell type / other subcontexts</div>
       </div>
       <div class="stat-card">
         <div class="value" title="{{ '{:,}'.format(stats.associations) }} associations">{{ stats.associations // 1_000_000 }} M+</div>

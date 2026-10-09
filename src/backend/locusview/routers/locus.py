@@ -28,10 +28,9 @@ from locusview.requestinfo import (
 )
 from locusview.viz import ld_legend, neg_log10_p, r2_color
 
-_UNINDEXED_QUERY_MESSAGE = (
-    "This query needs a database index that hasn't been added yet (region/variant lookups "
-    "aren't indexed the way gene lookups are) — see docs/process/status.md. Try gene mode, "
-    "or a tissue with fewer variants."
+_QUERY_TIMEOUT_MESSAGE = (
+    "This query exceeded the database time limit. Try a smaller region or a phenotype "
+    "with fewer variants."
 )
 
 # +/- around a variant position for variant-mode locus windows — shared by both the legacy
@@ -450,7 +449,7 @@ def router(repo: QtlRepository) -> APIRouter:
             try:
                 cis = repo.associations_in_region(chrom, start, end, tissue)
             except RepositoryTimeoutError:
-                return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
+                return JSONResponse({"error": _QUERY_TIMEOUT_MESSAGE}, status_code=503)
             return _regional_response(
                 cis,
                 label=f"chr{chrom}:{start}-{end}",
@@ -490,7 +489,7 @@ def router(repo: QtlRepository) -> APIRouter:
                     tissue,
                 )
             except RepositoryTimeoutError:
-                return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
+                return JSONResponse({"error": _QUERY_TIMEOUT_MESSAGE}, status_code=503)
             return _regional_response(
                 cis,
                 label=f"chr{variant_chrom}:{center} (+/-{_VARIANT_WINDOW // 1_000_000}MB)",
@@ -517,7 +516,8 @@ def router(repo: QtlRepository) -> APIRouter:
     ) -> Response:
         """Stacked multi-panel feed for the Data Browser's three locus tabs: one track per
         selected QTL/GWAS dataset (``datasets`` = comma-separated ``qtl:<id>``/``gwas:<id>``
-        keys), all sharing one canonical genomic window resolved from ``locus_mode``. GWAS tracks
+        keys), initially sharing one canonical genomic window resolved from ``locus_mode``.
+        GWAS tracks
         (``_gwas_track``) are always window-anchored, identically across all three modes — GWAS is
         trait x variant, not gene x variant, so it has no phenotype concept to branch on. The spec
         below is for QTL tracks (``_qtl_track``) specifically, per ``locus_mode``:
@@ -533,15 +533,14 @@ def router(repo: QtlRepository) -> APIRouter:
           beyond finding *which* phenotypes qualify.
         - **``region``**: matches every phenotype that **overlaps the given region**
           (``phenotype_summaries_in_region``, chrom/position-bounded, no gene concept) — a region
-          can legitimately overlap 100+ phenotypes at once. The frontend
-          shows **exactly the region the user typed**, unexpanded (``window_start``/``window_end``
-          are the caller's own ``start``/``end``, verbatim).
+          can legitimately overlap 100+ phenotypes at once. GWAS tracks use the typed region
+          (``window_start``/``window_end`` are the caller's own ``start``/``end``); checking a QTL
+          phenotype fetches and plots its variants within region center +/-2 MB.
         - **``variant``**: resolves the variant to a position first (``resolve_variant`` for a bare
           rsID, or the given ``chrom``/``position`` directly), then matches the phenotype list at
           that exact position the same way region mode does (still phenotype-only initially,
-          just position-bounded to one point before windowing). The frontend shows **variant
-          position +/-1 MB** (``_VARIANT_WINDOW`` — shared with the older single-track
-          ``/api/locus/regional`` endpoint's variant mode, same size).
+          just position-bounded to one point before windowing). GWAS tracks use **variant position
+          +/-1 MB** (``_VARIANT_WINDOW``), while checked QTL phenotypes use +/-2 MB.
         """
         keys = list(dict.fromkeys(k.strip() for k in datasets.split(",") if k.strip()))
         if not keys:
@@ -609,7 +608,7 @@ def router(repo: QtlRepository) -> APIRouter:
                         status_code=400,
                     )
             except RepositoryTimeoutError:
-                return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
+                return JSONResponse({"error": _QUERY_TIMEOUT_MESSAGE}, status_code=503)
             window_start = max(0, center - _VARIANT_WINDOW)
             window_end = center + _VARIANT_WINDOW
             label = f"chr{window_chrom}:{center} (+/-{_VARIANT_WINDOW // 1_000_000}MB)"
@@ -643,7 +642,7 @@ def router(repo: QtlRepository) -> APIRouter:
                         "kind": kind,
                         "label": f"{kind.upper()} dataset {id_str}",
                         "variants": [],
-                        "status": {"code": "error", "message": _UNINDEXED_QUERY_MESSAGE},
+                        "status": {"code": "error", "message": _QUERY_TIMEOUT_MESSAGE},
                     }
                 )
             except Exception:
@@ -691,7 +690,7 @@ def router(repo: QtlRepository) -> APIRouter:
         try:
             assocs = repo.associations_for_phenotype(dataset_id, phenotype_id, chrom, start, end)
         except RepositoryTimeoutError:
-            return JSONResponse({"error": _UNINDEXED_QUERY_MESSAGE}, status_code=503)
+            return JSONResponse({"error": _QUERY_TIMEOUT_MESSAGE}, status_code=503)
         lead = _min_p(assocs)
         variants = _track_variants(assocs, lead)
         return JSONResponse(

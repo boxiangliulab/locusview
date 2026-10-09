@@ -42,7 +42,7 @@ def _repo() -> FakeQtlRepository:
             # TP53's own phenotype in dataset 3 (sQTL), lead elsewhere in the cis window.
             EqtlAssociation(3, 141510, None, 17, 7_700_000, 1e-4, 0.2, 0.05, phenotype_id="clu_1"),
             EqtlAssociation(
-                3, 141510, 555, 17, 7_710_000, 1e-6, 0.2, 0.05, "C", "G",
+                3, 141510, 555, 17, 7_710_000, 1e-6, -0.7, 0.05, "C", "G",
                 phenotype_id="clu_1", median_tpm=0.0,
             ),
             EqtlAssociation(3, 141510, None, 17, 7_720_000, 1e-3, 0.3, 0.05, phenotype_id="clu_2"),
@@ -123,6 +123,9 @@ def test_gene_search_shows_each_contexts_most_significant_snp_and_every_phenotyp
     assert '<th>Type</th>\n              <th class="sd-divide">Phenotype</th>' in html
     # Dataset 3's best SNP is clu_1's lead (rs555, 1e-6); clu_2 (no rsID) is listed too.
     assert "rs555" in html and "chr17:7710000 C&gt;G" in html and "1.00e-06" in html
+    assert 'data-p="1e-06">1.00e-06</td>' in html
+    assert 'data-beta="-0.7">-0.700</td>' in html
+    assert "lead SNP (the SNP with the smallest p-value)" in html
     assert "clu_2" in html and "chr17:7720000" in html and "1.00e-03" in html
     assert html.index("clu_1") < html.index("clu_2")
     assert "Basophil count" not in html
@@ -221,9 +224,9 @@ def test_context_best_pvalue_handles_no_hits() -> None:
 
 def test_fake_gene_phenotype_leads_picks_min_p_per_phenotype() -> None:
     leads = _repo().gene_phenotype_leads(_TP53, [3])
-    assert [(d, s.phenotype_id, s.position, s.rs_id, s.pvalue) for d, s in leads] == [
-        (3, "clu_1", 7_710_000, 555, 1e-6),
-        (3, "clu_2", 7_720_000, None, 1e-3),
+    assert [(d, s.phenotype_id, s.position, s.rs_id, s.pvalue, s.beta) for d, s in leads] == [
+        (3, "clu_1", 7_710_000, 555, 1e-6, -0.7),
+        (3, "clu_2", 7_720_000, None, 1e-3, 0.3),
     ]
 
 
@@ -299,6 +302,34 @@ def test_api_default_threshold_is_1e_4() -> None:
     ]
 
 
+def test_variant_search_uses_searched_snp_stats_instead_of_phenotype_lead() -> None:
+    repo = FakeQtlRepository(
+        datasets=[Dataset(97, "Blood", "eQTL-Catalogue-eQTL-EUR", "INTERVAL")],
+        associations=[
+            EqtlAssociation(
+                97, 239697, 7209977, 17, 7_482_771, 1.30087e-319, 0.47715, 0.01,
+                phenotype_id="ENSG00000239697",
+            ),
+            EqtlAssociation(
+                97, 239697, 1042522, 17, 7_676_154, 5.01975e-16, 0.12937, 0.01,
+                phenotype_id="ENSG00000239697",
+            ),
+        ],
+    )
+    client = TestClient(create_app(repository=repo))
+    params = {"q": "rs1042522", "datasets": "qtl:97", "p": "1"}
+    response = client.get("/api/search-data", params=params)
+    assert response.status_code == 200
+    assert response.json()["rows"][0]["pvalue"] == 5.01975e-16
+    assert response.json()["rows"][0]["beta"] == 0.12937
+
+    page = client.get("/search-data", params=params)
+    assert page.status_code == 200
+    assert 'data-p="5.01975e-16"' in page.text
+    assert 'data-beta="0.12937"' in page.text
+    assert "searched variant in that phenotype" in page.text
+
+
 def test_api_gene_search_rows_carry_lead_snp_and_variant() -> None:
     status, body = _api({"q": "TP53", "p": "0.01"})
     assert status == 200 and body["type"] == "gene" and body["variant"] is None
@@ -331,7 +362,7 @@ def test_api_gene_search_rows_carry_lead_snp_and_variant() -> None:
             "lead_snp": "rs555",
             "variant": "chr17:7710000 C>G",
             "pvalue": 1e-6,
-            "beta": 0.2,
+            "beta": -0.7,
             "median_tpm": 0.0,
         },
         {

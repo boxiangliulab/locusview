@@ -47,6 +47,11 @@
         {% if mode == "gene" %}&middot; GWAS has no gene concept, so gene searches cover QTL only{% endif %}
       </span>
     </div>
+    {% if mode == "variant" %}
+    <p class="muted sd-message">The p-value and &beta; in each row belong to the searched variant in that phenotype.</p>
+    {% elif mode == "gene" %}
+    <p class="muted sd-message">The p-value and &beta; in each row belong to that phenotype's lead SNP (the SNP with the smallest p-value).</p>
+    {% endif %}
     {% if failed %}
     <p class="muted sd-message">{{ failed }} dataset{{ "s" if failed != 1 else "" }} could not be searched right now and {{ "are" if failed != 1 else "is" }} missing from the table.</p>
     {% endif %}

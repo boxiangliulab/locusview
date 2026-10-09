@@ -1,5 +1,5 @@
-// Data Browser: stacked Plotly panels, all sharing the same genomic-position x-axis range so
-// signal peaks can be compared visually.
+// Data Browser: stacked Plotly panels. Region/variant QTL phenotype plots extend around the
+// search center, while GWAS and gene-mode panels retain their original genomic window.
 //
 // GWAS panels render via render(), which is async: it fetches LD for each track's "pivot" —
 // bestByPvalue(variants, true), the best (lowest-p) point that actually HAS an rsID, which isn't
@@ -13,11 +13,11 @@
 // QTL results DON'T auto-plot — a genomic window can legitimately match many different
 // phenotypes at once (see routers/locus.py's _group_by_phenotype), so instead of one blob of
 // every matched variant, renderQtlTable() shows a checkbox row per matched phenotype; checking
-// one calls renderQtlPanels(), which filters that track's already-fetched variants down to just
-// that phenotype_id (no second fetch — every variant's phenotype_id came back in the original
-// /api/locus/multi-track response) and plots it as its own panel, LD-fetched around the same kind
-// of rsID-bearing pivot point as GWAS. It fetches /api/ld (same endpoint the single-track regional
-// plot's click-to-recolor uses) and LD-colors every point that also has an rsID, mirroring
+// one calls renderQtlPanels(), which loads that phenotype's variants on demand for region/variant
+// searches (and filters already-fetched variants in gene mode), then plots them as their own panel,
+// LD-fetched around the same kind of rsID-bearing pivot point as GWAS. It fetches /api/ld
+// (same endpoint the single-track regional plot's click-to-recolor uses) and LD-colors every
+// point that also has an rsID, mirroring
 // regional-plot.js's r2color scheme exactly — a point whose rsID has no r² on record with the
 // pivot still shows, in the "< 0.2 / not in panel" color (the 1000G table only stores pairs
 // >= 0.2, see ld_r2's docstring). Points without an rsID remain visible in gray. The user can
@@ -147,9 +147,10 @@ const MultiTrackPlot = (() => {
   // Draw one Plotly scattergl panel for a single track (GWAS, or one QTL phenotype), appended
   // into `container`, wiring click-to-pin for QTL points. `queryVariant` ({chrom, position,
   // rs_id}, variant-mode searches only) adds the pink searched-variant marker.
-  function renderTrack(container, track, region, onPointClick, queryVariant) {
+  function renderTrack(container, track, region, onPointClick, queryVariant, expandedWidth = null) {
     const panel = document.createElement("div");
     panel.className = "track-panel";
+    if (expandedWidth) panel.style.width = `${expandedWidth}px`;
     const status = track.status?.message || (!track.variants?.length ? "No association variants were returned for this dataset." : "");
     panel.innerHTML = `
       <div class="track-panel-header">
@@ -164,6 +165,7 @@ const MultiTrackPlot = (() => {
     if (status) return;
 
     const plotDiv = panel.querySelector(".track-panel-plot");
+    if (expandedWidth) plotDiv.style.height = `${Math.round(Math.min(container.clientWidth, 830) * 3 / 8)}px`;
     const fallbackColor = TRACK_COLOR[track.kind] || "#64748b";
     const v = track.variants;
     const hasAnyRsid = v.some((d) => d.rs_id !== null && d.rs_id !== undefined);
@@ -393,7 +395,7 @@ const MultiTrackPlot = (() => {
 
   // Render one locuszoom panel per checked phenotype row, LD-colored where possible (see module
   // comment above).
-  async function renderQtlPanels(container, region, selections, onPointClick, legendEl, population, queryVariant) {
+  async function renderQtlPanels(container, region, selections, onPointClick, legendEl, population, queryVariant, locusMode) {
     qtlUsedLd = false;
     purgePanels(container);
     if (!selections.length) {
@@ -403,14 +405,27 @@ const MultiTrackPlot = (() => {
     }
     container.innerHTML = "<p class='muted'>Loading&hellip;</p>";
 
+    // Region and variant searches keep the phenotype itself at the center of a 4 Mb plot.
+    // Widen the panel in proportion to the added genomic span instead of compressing its points.
+    const expanded = locusMode === "region" || locusMode === "variant";
+    const center = locusMode === "variant" && queryVariant?.position != null
+      ? queryVariant.position : (region.start + region.end) / 2;
+    const plotRegion = expanded
+      ? { ...region, start: Math.max(0, Math.floor(center - 2_000_000)), end: Math.floor(center + 2_000_000) }
+      : region;
+    const originalSpan = Math.max(1, region.end - region.start);
+    const plotSpan = plotRegion.end - plotRegion.start;
+    const widthFactor = expanded ? Math.max(1, Math.min(4, plotSpan / originalSpan)) : 1;
+    const expandedWidth = expanded ? Math.round(Math.min(container.clientWidth, 830) * widthFactor) : null;
+
     const panels = await Promise.all(
       selections.map(async ({ track, p }) => {
-        let variants = track.variants.filter((v) => v.phenotype_id === p.phenotype_id);
+        let variants = expanded ? [] : track.variants.filter((v) => v.phenotype_id === p.phenotype_id);
         let fetchError = null;
         const hasAnyRsid = variants.some((v) => v.rs_id !== null && v.rs_id !== undefined);
         if (!hasAnyRsid && track.dataset_id != null) {
           const fetched = await fetchPhenotypeVariants(
-            track.dataset_id, p.phenotype_id, region.chrom, region.start, region.end
+            track.dataset_id, p.phenotype_id, plotRegion.chrom, plotRegion.start, plotRegion.end
           );
           variants = fetched.variants;
           fetchError = fetched.error;
@@ -463,7 +478,7 @@ const MultiTrackPlot = (() => {
     );
 
     container.innerHTML = "";
-    panels.forEach((panel) => renderTrack(container, panel, region, onPointClick, queryVariant));
+    panels.forEach((panel) => renderTrack(container, panel, plotRegion, onPointClick, queryVariant, expandedWidth));
     updateLegend(legendEl);
   }
 
