@@ -1,0 +1,170 @@
+{% extends "layout.html" %}
+{% block title %}locusview{% endblock %}
+{% block head %}
+<style>
+  .hero {
+    background: var(--accent);
+    border-bottom: 1px solid #4489a8;
+    min-height: 400px; display: flex; align-items: center; padding: 48px 0;
+  }
+  .hero-inner { width: var(--page-content-width); margin: 0 auto; text-align: left; }
+  .hero h1 {
+    font-size: clamp(28px, 2.25vw, 40px); font-weight: 700; letter-spacing: -0.4px;
+    line-height: 1.2; margin: 0 0 22px; white-space: nowrap; color: #fff;
+    text-shadow: 0 5px 9px rgba(0, 0, 0, 0.65), 0 2px 3px rgba(0, 0, 0, 0.5);
+  }
+  .hero p.lede { font-size: 16px; color: #dee5ff; line-height: 1.75; margin-bottom: 32px; }
+  .hero-stats { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
+  .stat-card {
+    min-width: 172px; background: #f4fbfc;
+    border: 2px solid #8abdc9; border-top: 4px solid #a8d2db; border-radius: 12px;
+    padding: 22px 30px; box-shadow: 0 10px 26px rgba(4, 9, 48, 0.28);
+  }
+  .stat-card .value { font-size: 32px; font-weight: 750; color: var(--accent); letter-spacing: -1px; line-height: 1.15; text-shadow: 0 2px 3px rgba(33, 33, 97, 0.18); }
+  .stat-card .label { font-size: 14px; font-weight: 600; color: #475569; margin-top: 8px; text-shadow: 0 1px 1px rgba(15, 23, 42, 0.12); }
+  @media (max-width: 1199px) { .hero h1 { white-space: normal; letter-spacing: 0.2px; } }
+
+  .section { width: var(--page-content-width); margin: 0 auto; padding: 48px 0 8px; }
+  .section h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 6px; }
+  .section > p.lede { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+
+  .dataset-table-wrap {
+    overflow-x: auto; border-radius: 10px; border: 1px solid var(--line);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  table.dataset-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.dataset-table th {
+    padding: 12px 18px; text-align: left; background: var(--bg); border-bottom: 1px solid var(--line);
+    color: var(--accent); font-weight: 600; font-size: 11px; letter-spacing: 0.5px;
+  }
+  table.dataset-table td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+  .dataset-table-wrap > table.dataset-table th:not(:first-child),
+  .dataset-table-wrap > table.dataset-table td:not(:first-child) { text-align: center; }
+  /* Tighter rows for the body-map click-result table specifically (not the QTL/GWAS dataset
+     tables above, which keep the roomier default) — .body-map-side is sized wide enough that
+     nowrap content never needs horizontal scroll. */
+  #body-map-panel-table td { padding: 7px 18px; }
+  .dataset-label { font-weight: 600; color: var(--ink); font-size: 14px; }
+  .mono { font-family: var(--mono); }
+
+  .body-map-diagram { flex: 3; min-width: 0; position: relative; }
+  .body-map {
+    display: flex; align-items: center; justify-content: center; gap: 4px; position: relative;
+  }
+  .body-map-labels {
+    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+    font-size: 15px; flex: 0 0 195px; padding-top: 28px; padding-bottom: 28px;
+  }
+  .body-map-labels-left { align-items: flex-end; text-align: right; }
+  .body-map-labels-right { align-items: flex-start; text-align: left; }
+  .body-map-label {
+    cursor: pointer; padding: 2px 7px; border-radius: 4px; color: var(--muted); line-height: 1.35;
+    transition: background 0.1s, color 0.1s;
+  }
+  .body-map-label.hover, .body-map-label.active { background: var(--accent-soft); color: var(--accent); }
+  /* One figure now (was male + female side by side) — so it gets the width both used to share. */
+  .body-map-figures { display: flex; gap: 6px; flex: 0 0 auto; }
+  .body-map-figure { flex: 0 0 285px; min-width: 0; }
+  .body-map-figure svg { width: 100%; height: auto; display: block; }
+  .body-map-leaders { position: absolute; top: 0; left: 0; pointer-events: none; }
+  .body-map-leaders line { stroke: var(--faint); stroke-width: 1.1; }
+  .body-region { fill: var(--faint); cursor: pointer; transition: fill 0.15s, opacity 0.15s; }
+  .body-region.available { fill: var(--accent); opacity: 0.55; }
+  .body-region.available:hover, .body-region.available.hover { opacity: 0.9; fill: var(--lead); }
+  .body-region.available.active { opacity: 1; fill: var(--lead); }
+  .body-region.unavailable { fill: #94a3b8; opacity: 0.2; cursor: default; }
+  .body-region.unavailable:hover { opacity: 0.35; }
+  .body-map-tooltip {
+    position: fixed; z-index: 50; background: #1e293b; color: #f8fafc; font-size: 12px;
+    padding: 6px 10px; border-radius: 6px; pointer-events: none; max-width: 220px;
+  }
+  .body-map-side { flex: 0 0 460px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .body-map-legend { display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: var(--muted); }
+  .body-map-legend .dot {
+    display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
+    vertical-align: middle;
+  }
+  .body-map-legend .dot.available { background: var(--accent); }
+  .body-map-legend .dot.unavailable { background: #e2e8f0; }
+  .body-map-panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .body-map-panel-title { font-weight: 600; font-size: 16px; margin-bottom: 10px; }
+  /* Keep short result sets unchanged. With more than 20 rows, JS adds .scrollable and sets the
+     exact height of the header plus the first 20 rendered rows as this viewport's maximum. */
+  .body-map-panel-results.scrollable { overflow-y: auto; overscroll-behavior: contain; }
+  .body-map-panel-results.scrollable #body-map-panel-table th {
+    position: sticky; top: 0; z-index: 1;
+  }
+  .body-map-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  @media (max-width: 760px) {
+    .body-map-diagram, .body-map-side { flex: 0 0 100%; max-width: 100%; }
+    .body-map-diagram { overflow-x: auto; }
+  }
+
+  .citation-list { display: flex; flex-direction: column; gap: 12px; }
+  .citation {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 16px 20px; display: flex; gap: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  }
+  .citation-index {
+    background: var(--accent-soft); color: var(--accent); padding: 4px 10px; border-radius: 5px;
+    font-size: 12px; font-weight: 700; flex-shrink: 0; height: fit-content;
+  }
+  .citation-text { font-size: 13.5px; color: #475569; line-height: 1.65; }
+  .citation-doi { font-size: 11px; margin-top: 5px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="hero-inner">
+    <h1><span class="brand-name">LocusView</span>：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
+    <p class="lede">LocusView brings publicly available quantitative trait loci (QTL) and GWAS data together in one interactive portal. Explore how genetic variants relate to molecular phenotypes across tissues and cell types, and compare association signals across datasets and traits. Search for a gene or variant, browse a genomic region, and open LocusZoom plots to inspect the associations behind each result. You can also retrieve Search data results through the API for further analysis.</p>
+    <div class="hero-stats">
+      <div class="stat-card">
+        <div class="value">{{ stats.publications }}</div>
+        <div class="label">Datasources</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">{{ stats.tissues }}</div>
+        <div class="label">Tissue / sample contexts</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">{{ stats.cell_types }}</div>
+        <div class="label">Cell type / other subcontexts</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" title="{{ '{:,}'.format(stats.associations) }} associations">{{ stats.associations // 1_000_000 }} M+</div>
+        <div class="label">Associations</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section body-map-section">
+  <h2>Browse by tissue</h2>
+  <p class="lede">Hover the body map for tissues with integrated data; click one to see its datasets.</p>
+  <div class="body-map-row">
+    {% include "partials/_body_map.html" %}
+  </div>
+</div>
+
+<div class="section">
+  <h2>Available QTL datasets</h2>
+  <p class="lede">Datasets currently integrated into LocusView, read live from the shared LocusCompare2 database.</p>
+  {% include "partials/_dataset_table.html" %}
+</div>
+
+<div class="section">
+  <h2>Available GWAS datasets</h2>
+  <p class="lede">GWAS traits currently integrated into LocusView.</p>
+  {% include "partials/_gwas_dataset_table.html" %}
+</div>
+
+<div class="section">
+  <h2>Citations</h2>
+  <p class="lede">Please cite LocusCompare and LocusCompare2 when using these tools in publications.</p>
+  {% include "partials/_citations.html" %}
+</div>
+{% endblock %}

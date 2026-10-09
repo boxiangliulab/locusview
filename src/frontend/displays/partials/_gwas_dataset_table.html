@@ -1,0 +1,31 @@
+{# Available GWAS datasets table (Home page). Context: gwas_rows = [{id, trait, population, source, accession}]. #}
+<div class="dataset-table-wrap">
+  {% if gwas_rows %}
+  <table class="dataset-table">
+    <thead>
+      <tr>
+        <th>Trait</th>
+        <th>Data type</th>
+        <th>Population</th>
+        <th>Source</th>
+        <th>Accession ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in gwas_rows %}
+      <tr>
+        <td>
+          <div class="dataset-label">{{ row.trait.replace('_', ' ') }}</div>
+        </td>
+        <td><span class="badge badge-orange">GWAS</span></td>
+        <td class="mono muted">{{ row.population }}</td>
+        <td>{{ row.source }}</td>
+        <td class="mono muted">{{ row.accession }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No GWAS datasets configured (offline/fake repository).</p>
+  {% endif %}
+</div>

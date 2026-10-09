@@ -6,7 +6,7 @@ useful instead of a pile of half-overlapping pages.
 
 | Quadrant | Reader need | Voice | Folder |
 |---|---|---|---|
-| **Tutorials** | "Teach me by doing" (learning-oriented) | encouraging, step-by-step, guaranteed to work | [`tutorials/`](tutorials/) |
+| **Tutorials** | "Teach me by doing" (learning-oriented) | encouraging, step-by-step, guaranteed to work | `tutorials/` — *planned, not written yet* |
 | **How-to guides** | "Help me do a specific task" (task-oriented) | terse, imperative, assumes some knowledge | [`how-to/`](how-to/) |
 | **Reference** | "Let me look up a fact" (information-oriented) | precise, exhaustive, dry | [`reference/`](reference/) |
 | **Explanation** | "Help me understand why" (understanding-oriented) | discursive, gives context and trade-offs | [`explanation/`](explanation/) |
@@ -17,6 +17,8 @@ instead.
 
 ### Project-specific folders (not Diátaxis quadrants, but docs-as-code)
 - [`product/`](product/) — Vision, PRD, roadmap (the *what* and *why*).
+- [`design/`](design/) — UI/UX design specs and mockups, authored by the designer (@liufei-f).
+  Note `CODEOWNERS` has no entry for this folder, so review isn't enforced on it today.
 - [`process/`](process/) — ways of working, agent workflow, retrospectives (*how we operate*).
 - [`adr/`](adr/) — Architecture Decision Records (*why we chose what we chose*).
 - [`course/`](course/) — the teaching layer that maps the build to learning outcomes.
