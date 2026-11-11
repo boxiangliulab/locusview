@@ -37,8 +37,12 @@ def test_region() -> None:
     assert (q.chrom, q.start, q.end) == ("1", 1000, 2000)
 
 
-def test_region_normalises_mito() -> None:
-    assert parse_query("chrM:1-100").chrom == "MT"
+@pytest.mark.parametrize(
+    "text",
+    ["chrY:1-100", "chrM:1-100", "chrMT:1-100", "chr23:1-100", "chr99:1-100"],
+)
+def test_region_rejects_chromosomes_not_supported_by_the_backend(text: str) -> None:
+    assert parse_query(text).kind is QueryKind.UNKNOWN
 
 
 def test_region_with_start_after_end_is_unknown() -> None:
@@ -55,6 +59,11 @@ def test_variant_with_alleles() -> None:
     q = parse_query("chrX:12345:a:g")
     assert q.kind is QueryKind.VARIANT
     assert (q.chrom, q.position, q.ref, q.alt) == ("X", 12345, "A", "G")
+
+
+@pytest.mark.parametrize("text", ["chrY:1", "chrM:1", "chrMT:1", "chr23:1", "chr99:1"])
+def test_variant_rejects_chromosomes_not_supported_by_the_backend(text: str) -> None:
+    assert parse_query(text).kind is QueryKind.UNKNOWN
 
 
 def test_gene_symbol_preserves_case() -> None:

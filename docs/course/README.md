@@ -74,7 +74,7 @@ teaches it (artifact), and where we check it (assessment touchpoint).
 | **Continuous Integration** | 4 | `.github/workflows/ci.yml` (lint→test→genomics smoke→coverage) | Milestone demos (green CI) |
 | **Loop engineering** with agents | 5 | `docs/process/agent-workflow.md`; team Skills | Journal, "Lecture 1" debrief |
 | The **safety harness** (guardrails) | 5 | `CODEOWNERS`, `gitleaks`, coverage gate, push protection | Portfolio, Final defense |
-| **Build** the thin vertical slice (MVP) | 3, 6 | `src/locusview/…`; Phase-1 feature PRs | Milestone 2, Final build |
+| **Build** the thin vertical slice (MVP) | 3, 6 | `src/backend/locusview/…`; Phase-1 feature PRs | Milestone 2, Final build |
 | **Documentation-as-teaching** (Diátaxis) | 6 | the `docs/` tree; how-to + reference pages authored | Milestone 2 (docs a peer can follow) |
 | **Retrospective** / reflection | 1 | `docs/process/retros/` | Reflective journal |
 
