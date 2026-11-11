@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}locusview{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="{{ asset('css/base.css') }}" />
   <!-- HTMX: lets us add interactivity without a JS build chain (ADR-0002). -->
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
@@ -11,7 +15,7 @@
 </head>
 <body>
   <header class="site-header">
-    <div class="brand">
+    <a class="brand" href="/" aria-label="LocusView home">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.5"></circle>
         <circle cx="12" cy="12" r="2.5" fill="currentColor"></circle>
@@ -20,8 +24,8 @@
         <line x1="2.5" y1="12" x2="7" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line>
         <line x1="17" y1="12" x2="21.5" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line>
       </svg>
-      Locus<span class="accent">View</span>
-    </div>
+      <span>Locus<span class="accent">View</span></span>
+    </a>
     <nav class="site-nav">
       <a href="/" class="{{ 'active' if active == 'home' else '' }}">Home</a>
       <a href="/search-data" class="{{ 'active' if active == 'search_data' else '' }}">Search data</a>
@@ -37,7 +41,10 @@
   </div>
 
   <footer class="site-footer">
-    LocusView v{{ version }} &middot; Phase 1 &middot; data: QTL &amp; GWAS via the shared LocusCompare2 database
+    <div class="site-footer-inner">
+      <span class="site-footer-brand">Locus<span>View</span></span>
+      <span>LocusView v{{ version }} &middot; Phase 1 &middot; data: QTL &amp; GWAS via the shared LocusCompare2 database</span>
+    </div>
   </footer>
 </body>
 </html>
