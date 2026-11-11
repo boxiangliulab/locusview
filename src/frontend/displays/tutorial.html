@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}Tutorial — LocusView{% endblock %}
+{% block title %}Tutorial — LocusHub{% endblock %}
 {% block head %}
 <style>
   .tutorial-page { width: var(--page-content-width); margin: 0 auto; padding: 48px 0 24px; }
@@ -87,7 +87,7 @@
 <pre class="tutorial-code"><code>import requests
 import pandas as pd
 
-base = "<span id="tutorial-origin">https://your-locusview-host</span>"
+base = "<span id="tutorial-origin">https://your-locushub-host</span>"
 r = requests.get(f"{base}/api/search-data", params={"q": "TP53", "p": {{ default_p }}}, timeout=60)
 r.raise_for_status()
 data = r.json()

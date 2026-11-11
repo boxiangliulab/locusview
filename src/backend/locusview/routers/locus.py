@@ -12,6 +12,7 @@ the Data Browser has moved to the multi-track plot; kept for the gene page's own
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import asdict
 from typing import TypeVar
 
 from fastapi import APIRouter, Response
@@ -43,6 +44,9 @@ _VARIANT_WINDOW = 1_000_000
 # single-track /api/locus/regional and /api/gene/{key}/regional endpoints keep using the gene's
 # own span instead). Anchored to gene *start*, not the gene body, per the product spec.
 _GENE_WINDOW = 1_000_000
+
+# Region queries use a fixed 3 Mb display window, separate from phenotype selection bounds.
+_REGION_HALF_WINDOW = 1_500_000
 
 # User-supplied region requests are allowed up to the largest window exercised against the live
 # database (~7 seconds for GWAS at 10 Mb). This prevents an accidental chromosome-scale scan while
@@ -267,6 +271,8 @@ def _qtl_track(
     chrom: str,
     start: int,
     end: int,
+    *,
+    anchor_only: bool = False,
 ) -> dict[str, object] | None:
     """One QTL panel for the multi-track plot — see ``multi_track``'s docstring for the full
     per-locus-tab request/display spec this implements. The initial request returns phenotype IDs
@@ -283,7 +289,7 @@ def _qtl_track(
         summaries = repo.phenotypes_for_gene(gene, dataset_id)
     else:
         summaries = repo.phenotype_summaries_in_region(
-            chrom, start, end, dataset_id, _MAX_PHENOTYPE_ROWS
+            chrom, start, end, dataset_id, _MAX_PHENOTYPE_ROWS, anchor_only=anchor_only
         )
     lead = _min_p(assocs)
     if lead is None and summaries:
@@ -307,7 +313,11 @@ def _qtl_track(
             "message": (
                 "No QTL phenotype or association was found for this gene in this dataset."
                 if gene is not None
-                else "No QTL phenotype overlaps the requested region."
+                else (
+                    "No QTL phenotype TSS or peak center falls within the query region."
+                    if anchor_only
+                    else "No QTL phenotype overlaps the requested region."
+                )
             ),
         }
     # Every locus mode deliberately leaves variants empty. The browser requests one selected
@@ -373,6 +383,23 @@ def router(repo: QtlRepository) -> APIRouter:
     """Build the Locus View routes: the two regional-plot feeds, the Data Browser's multi-track
     feed, the per-phenotype LD-enrichment endpoint, and the shared LD lookup."""
     router = APIRouter()
+
+    @router.get("/api/locus/genes")
+    def locus_genes(chrom: str, start: int, end: int) -> Response:
+        """GENCODE v39 gene bodies for the plot's actual visible window (GRCh38)."""
+        if error := _region_validation_error(chrom, start, end):
+            return JSONResponse({"error": error}, status_code=400)
+        try:
+            genes = repo.genes_in_region(chrom, start, end)
+        except RepositoryTimeoutError:
+            return JSONResponse({"error": _QUERY_TIMEOUT_MESSAGE}, status_code=503)
+        return JSONResponse(
+            {
+                "genes": [asdict(g) for g in genes[:1000]],
+                "truncated": len(genes) > 1000,
+                "annotation": "GENCODE v39 · GRCh38",
+            }
+        )
 
     @router.get("/api/gene/{key}/regional")
     def regional(key: str, tissue: int, population: str = "EUR") -> Response:
@@ -531,11 +558,10 @@ def router(repo: QtlRepository) -> APIRouter:
           frontend always shows a window of **gene start +/-1 MB** (``_GENE_WINDOW``) — the same
           fixed window regardless of which branch matched, gene coordinates themselves aren't used
           beyond finding *which* phenotypes qualify.
-        - **``region``**: matches every phenotype that **overlaps the given region**
-          (``phenotype_summaries_in_region``, chrom/position-bounded, no gene concept) — a region
-          can legitimately overlap 100+ phenotypes at once. GWAS tracks use the typed region
-          (``window_start``/``window_end`` are the caller's own ``start``/``end``); checking a QTL
-          phenotype fetches and plots its variants within region center +/-2 MB.
+        - **``region``**: a gene phenotype's strand-aware TSS, or a caQTL peak's
+          midpoint, must fall inside the original query interval. All plots display a separate
+          fixed 3 Mb window centered on the query midpoint. Near chromosome start the window
+          shifts right to [0, 3 Mb], preserving the span.
         - **``variant``**: resolves the variant to a position first (``resolve_variant`` for a bare
           rsID, or the given ``chrom``/``position`` directly), then matches the phenotype list at
           that exact position the same way region mode does (still phenotype-only initially,
@@ -581,7 +607,10 @@ def router(repo: QtlRepository) -> APIRouter:
                 )
             if error := _region_validation_error(chrom, start, end):
                 return JSONResponse({"error": error}, status_code=400)
-            window_chrom, window_start, window_end = chrom, start, end
+            center = (start + end) // 2
+            window_chrom = chrom
+            window_start = max(0, center - _REGION_HALF_WINDOW)
+            window_end = window_start + 2 * _REGION_HALF_WINDOW
             label = f"chr{chrom}:{start}-{end}"
 
         elif locus_mode == "variant":
@@ -617,6 +646,11 @@ def router(repo: QtlRepository) -> APIRouter:
         else:
             return JSONResponse({"error": f"unknown locus_mode: {locus_mode}"}, status_code=400)
 
+        selection_start, selection_end = window_start, window_end
+        if locus_mode == "region":
+            assert start is not None and end is not None
+            selection_start, selection_end = start, end
+
         tracks: list[dict[str, object]] = []
         for key in keys:
             kind, _, id_str = key.partition(":")
@@ -627,7 +661,13 @@ def router(repo: QtlRepository) -> APIRouter:
                 track: dict[str, object] | None
                 if kind == "qtl":
                     track = _qtl_track(
-                        repo, dataset_id, resolved_gene, window_chrom, window_start, window_end
+                        repo,
+                        dataset_id,
+                        resolved_gene,
+                        window_chrom,
+                        selection_start,
+                        selection_end,
+                        anchor_only=locus_mode == "region",
                     )
                 elif kind == "gwas":
                     track = _gwas_track(repo, dataset_id, window_chrom, window_start, window_end)
@@ -671,6 +711,11 @@ def router(repo: QtlRepository) -> APIRouter:
                     else None
                 ),
                 "region": {"chrom": window_chrom, "start": window_start, "end": window_end},
+                "query_region": (
+                    {"chrom": window_chrom, "start": selection_start, "end": selection_end}
+                    if locus_mode == "region"
+                    else None
+                ),
                 "query_variant": query_variant,
                 "tracks": tracks,
             }

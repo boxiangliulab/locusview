@@ -212,6 +212,10 @@ class QtlRepository(Protocol):
         """Resolve a gene symbol or Ensembl id to a :class:`Gene`, or ``None`` if unknown."""
         ...
 
+    def genes_in_region(self, chrom: str, start: int, end: int) -> list[Gene]:
+        """Return up to 1001 overlapping GENCODE genes, ordered by genomic start."""
+        ...
+
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
     ) -> list[EqtlAssociation]:
@@ -240,9 +244,18 @@ class QtlRepository(Protocol):
         ...
 
     def phenotype_summaries_in_region(
-        self, chrom: str, start: int, end: int, dataset_id: int, limit: int = 50
+        self,
+        chrom: str,
+        start: int,
+        end: int,
+        dataset_id: int,
+        limit: int = 50,
+        *,
+        anchor_only: bool = False,
     ) -> list[PhenotypeSummary]:
-        """Return the phenotypes whose OWN feature overlaps ``[start, end]``.
+        """Return phenotypes overlapping the window, or anchored in it when ``anchor_only``.
+
+        Anchor mode uses the gene TSS (+ start / - end) or the caQTL peak midpoint.
 
         "Overlaps" is about the phenotype's own coordinates — a caQTL peak, or a gene — NOT about
         where its tested variants fall: a cis window reaches ~1 Mb past the feature, so matching on
@@ -497,10 +510,20 @@ class FakeQtlRepository:
         return CatalogStats(
             # Fake datasets have no publication metadata; count distinct source labels here.
             publications=len({dataset.source for dataset in self._datasets}),
-            tissues=len({context.level_1 for context in self._qtl_contexts
-                         if context.level_1 and not (context.level_2 or '').strip()}),
-            cell_types=len({context.level_2.strip() for context in self._qtl_contexts
-                            if context.level_2 and context.level_2.strip()}),
+            tissues=len(
+                {
+                    context.level_1
+                    for context in self._qtl_contexts
+                    if context.level_1 and not (context.level_2 or "").strip()
+                }
+            ),
+            cell_types=len(
+                {
+                    context.level_2.strip()
+                    for context in self._qtl_contexts
+                    if context.level_2 and context.level_2.strip()
+                }
+            ),
             associations=len(self._associations),
         )
 
@@ -513,6 +536,13 @@ class FakeQtlRepository:
             if g.symbol.upper() == key.upper() or g.ensembl_id.split(".", 1)[0].upper() == core:
                 return g
         return None
+
+    def genes_in_region(self, chrom: str, start: int, end: int) -> list[Gene]:
+        """See :meth:`QtlRepository.genes_in_region`."""
+        return sorted(
+            (g for g in self._genes if g.chrom == chrom and g.start <= end and g.end >= start),
+            key=lambda g: (g.start, g.ensembl_id),
+        )[:1001]
 
     def eqtls_for_gene(
         self, gene_id: int, dataset_ids: Sequence[int], limit: int = 100
@@ -555,7 +585,9 @@ class FakeQtlRepository:
             if a.dataset_id == dataset_id and str(a.chrom) == chrom and start <= a.position <= end
         ]
 
-    def _phenotype_overlaps(self, hit: EqtlAssociation, chrom: str, start: int, end: int) -> bool:
+    def _phenotype_overlaps(
+        self, hit: EqtlAssociation, chrom: str, start: int, end: int, *, anchor_only: bool = False
+    ) -> bool:
         """Whether this association's PHENOTYPE (not its variant) overlaps ``[start, end]``.
 
         A ``chr_start_end`` phenotype id carries the caQTL peak's own coordinates; otherwise the
@@ -565,21 +597,33 @@ class FakeQtlRepository:
         peak = _parse_peak_id(hit.phenotype_id)
         if peak is not None:
             peak_chrom, peak_start, peak_end = peak
+            if anchor_only:
+                return peak_chrom == chrom and 2 * start <= peak_start + peak_end <= 2 * end
             return peak_chrom == chrom and peak_start <= end and peak_end >= start
         gene = next((g for g in self._genes if g.gene_id == hit.gene_id), None)
         if gene is None:
             return False
+        if anchor_only:
+            tss = gene.end if gene.strand == "-" else gene.start
+            return gene.chrom == chrom and start <= tss <= end
         return gene.chrom == chrom and gene.start <= end and gene.end >= start
 
     def phenotype_summaries_in_region(
-        self, chrom: str, start: int, end: int, dataset_id: int, limit: int = 50
+        self,
+        chrom: str,
+        start: int,
+        end: int,
+        dataset_id: int,
+        limit: int = 50,
+        *,
+        anchor_only: bool = False,
     ) -> list[PhenotypeSummary]:
         """See :meth:`QtlRepository.phenotype_summaries_in_region`."""
         groups: dict[str | None, list[EqtlAssociation]] = {}
         for hit in self._associations:
             if hit.dataset_id != dataset_id:
                 continue
-            if not self._phenotype_overlaps(hit, chrom, start, end):
+            if not self._phenotype_overlaps(hit, chrom, start, end, anchor_only=anchor_only):
                 continue
             groups.setdefault(hit.phenotype_id, []).append(hit)
         summaries = []

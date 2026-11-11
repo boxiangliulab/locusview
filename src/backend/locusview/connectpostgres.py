@@ -362,6 +362,27 @@ class PostgresQtlRepository:
             strand=str(strand),
         )
 
+    def genes_in_region(self, chrom: str, start: int, end: int) -> list[Gene]:
+        """Return overlapping gene bodies, including genes crossing either window boundary."""
+        rows = self._query(
+            'SELECT gene_id_key, gene_name, gene_id, chr, start, "end", strand '
+            'FROM gencode_v39 WHERE chr = %s AND start <= %s AND "end" >= %s '
+            "ORDER BY start, gene_id LIMIT 1001",
+            (f"chr{chrom}", end, start),
+        )
+        return [
+            Gene(
+                int(r[0]),
+                str(r[1]),
+                str(r[2]),
+                str(r[3]).removeprefix("chr"),
+                int(r[4]),
+                int(r[5]),
+                str(r[6]),
+            )
+            for r in rows
+        ]
+
     def _gene_by_key(self, gene_id: int) -> Gene | None:
         """Look up a gene by its integer ``gene_id_key`` (e.g. ``141510``) — used by
         :meth:`cis_associations`'s caQTL-style branch to get the gene's genomic start."""
@@ -401,7 +422,14 @@ class PostgresQtlRepository:
         return bool(rows) and str(rows[0][0]).strip().lower() in _PEAK_QTL_TYPES
 
     def _peak_phenotypes(
-        self, dataset_id: int, chrom: str, start: int, end: int, limit: int | None = None
+        self,
+        dataset_id: int,
+        chrom: str,
+        start: int,
+        end: int,
+        limit: int | None = None,
+        *,
+        center_in_region: bool = False,
     ) -> list[Row]:
         """``(id, phenotype_id, gene_id)`` for every caQTL peak **overlapping** ``[start, end]``.
 
@@ -422,9 +450,13 @@ class PostgresQtlRepository:
         sql = (
             f"SELECT id, phenotype_id, gene_id FROM {_phenotype_table(dataset_id)} "
             f'WHERE chrom = %s AND start <= %s AND "end" >= %s '
-            f'ORDER BY start, "end"'
         )
         params: tuple[Any, ...] = (f"chr{chrom}", end, start)  # peak chrom uses the "chr1" form
+        if center_in_region:
+            # Doubling the bounds preserves half-base midpoints without integer truncation.
+            sql += 'AND (start::bigint + "end"::bigint) BETWEEN %s AND %s '
+            params += (2 * start, 2 * end)
+        sql += 'ORDER BY start, "end"'
         if limit is not None:
             sql += " LIMIT %s"
             params += (limit,)
@@ -589,44 +621,42 @@ class PostgresQtlRepository:
         return [_row_to_eqtl(dataset_id, r) for r in rows]
 
     def phenotype_summaries_in_region(
-        self, chrom: str, start: int, end: int, dataset_id: int, limit: int = 50
+        self,
+        chrom: str,
+        start: int,
+        end: int,
+        dataset_id: int,
+        limit: int = 50,
+        *,
+        anchor_only: bool = False,
     ) -> list[PhenotypeSummary]:
-        """Phenotypes whose OWN feature overlaps ``[start, end]``, without loading association
-        values. p-values and variant details are deliberately deferred until the user selects one.
+        """Return phenotype IDs without association values.
 
-        "Overlaps" means the phenotype's own coordinates — the caQTL peak, or the gene — intersect
-        the window, which is what a user typing ``chr17:6661179-8661779`` is asking for:
-
-        - **caQTL**: peaks straight out of the rebuilt ``_phenotype`` table's ``(chrom, start,
-          "end")`` index (:meth:`_peak_phenotypes`).
-        - **every other type**: the window's overlapping genes from ``gencode_v39`` (its own
-          ``(chr, start, end)`` index), then the phenotype rows carrying those ``gene_id``s —
-          the same gencode-then-gene_id path :meth:`phenotypes_for_gene` uses, just for a window's
-          worth of genes instead of one.
-
-        This deliberately does NOT go through the shard's variant positions the way
-        :meth:`associations_in_region` does. Matching "phenotypes with a tested variant inside the
-        window" pulls in phenotypes sitting up to a full cis window (~1 Mb) OUTSIDE it: their
-        variants reach in, but the peak/gene itself is nowhere near what the user typed. Confirmed
-        live on ``chr17:6661179-8661779`` — peak ``chr17_5665386_5665629`` (a megabyte to the left)
-        matched because its tested variants span 4,666,082-6,665,497, and since those out-of-window
-        peaks also sort first by ``phenotype_id``, all 50 rows of the Tenk10k panel were peaks that
-        didn't overlap the window at all, hiding every one of the 596 that did.
+        Region mode sets ``anchor_only``: gene TSS (start on +, end on -), or peak
+        midpoint, must lie inside the user's original, inclusive query interval.
+        The default overlap rule is retained for variant-mode position queries.
         """
         pheno = _phenotype_table(dataset_id)
         if self._is_peak_dataset(dataset_id):
             rows: list[Row] = [
-                (r[1], r[2]) for r in self._peak_phenotypes(dataset_id, chrom, start, end, limit)
-            ]
-        else:
-            gene_keys = [
-                str(r[0])
-                for r in self._query(
-                    "SELECT gene_id_key FROM gencode_v39 "
-                    'WHERE chr = %s AND start <= %s AND "end" >= %s ORDER BY start',
-                    (f"chr{chrom}", end, start),
+                (r[1], r[2])
+                for r in self._peak_phenotypes(
+                    dataset_id, chrom, start, end, limit, center_in_region=anchor_only
                 )
             ]
+        else:
+            gene_sql = (
+                "SELECT gene_id_key FROM gencode_v39 "
+                'WHERE chr = %s AND start <= %s AND "end" >= %s '
+            )
+            gene_params: tuple[Any, ...] = (f"chr{chrom}", end, start)
+            if anchor_only:
+                gene_sql += (
+                    "AND (CASE WHEN strand = '-' THEN \"end\" ELSE start END) BETWEEN %s AND %s "
+                )
+                gene_params += (start, end)
+            gene_sql += "ORDER BY start"
+            gene_keys = [str(r[0]) for r in self._query(gene_sql, gene_params)]
             if not gene_keys:
                 return []
             rows = self._query(

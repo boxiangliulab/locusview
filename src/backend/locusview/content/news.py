@@ -59,7 +59,7 @@ NEWS: list[NewsEntry] = [
     ),
     NewsEntry(
         date="July 2026",
-        title="LocusView v1.0 — initial release",
+        title="LocusHub v1.0 — initial release",
         body=(
             "Search a gene by symbol or Ensembl id and browse its eQTLs across GTEx v8 tissues, "
             "with CSV/TSV download."

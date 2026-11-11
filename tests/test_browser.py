@@ -225,3 +225,11 @@ def test_gwas_options_for_dataset() -> None:
 def test_gwas_options_for_unknown_dataset_is_empty() -> None:
     response = _client().get("/api/browser/gwas/options", params={"dataset": "NOPE"})
     assert response.json() == []
+
+
+def test_region_input_explains_phenotype_filter_and_display_window() -> None:
+    html = _client().get("/browser?locus_mode=region&region=chr1:10000-20000").text
+    assert 'aria-describedby="db-region-hint"' in html
+    assert "gene TSS or caQTL peak center" in html
+    assert "Plots display 3 Mb centered on the query midpoint" in html
+    assert "shifted right near chromosome start" in html

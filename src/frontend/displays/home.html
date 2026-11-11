@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}locusview{% endblock %}
+{% block title %}LocusHub{% endblock %}
 {% block head %}
 <style>
   .hero { background: var(--bg); border-bottom: 1px solid var(--line); padding: clamp(40px, 6vw, 72px) 0 48px; }
@@ -113,8 +113,8 @@
 {% block content %}
 <div class="hero">
   <div class="hero-inner">
-    <h1><span class="brand-name">LocusView</span>：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
-    <p class="lede">LocusView brings publicly available quantitative trait loci (QTL) and GWAS data together in one interactive portal. Explore how genetic variants relate to molecular phenotypes across tissues and cell types, and compare association signals across datasets and traits. Search for a gene or variant, browse a genomic region, and open LocusZoom plots to inspect the associations behind each result. You can also retrieve Search data results through the API for further analysis.</p>
+    <h1><span class="brand-name">LocusHub</span>：<span class="accent">Explore QTL associations across cell types and tissues</span></h1>
+    <p class="lede">LocusHub brings publicly available quantitative trait loci (QTL) and GWAS data together in one interactive portal. Explore how genetic variants relate to molecular phenotypes across tissues and cell types, and compare association signals across datasets and traits. Search for a gene or variant, browse a genomic region, and open LocusZoom plots to inspect the associations behind each result. You can also retrieve Search data results through the API for further analysis.</p>
     <div class="hero-stats">
       <div class="stat-card">
         <div class="value">{{ stats.publications }}</div>
@@ -146,13 +146,13 @@
 
 <div class="section">
   <h2>Available QTL datasets</h2>
-  <p class="lede">Datasets currently integrated into LocusView, read live from the shared LocusCompare2 database.</p>
+  <p class="lede">Datasets currently integrated into LocusHub, read live from the shared LocusCompare2 database.</p>
   {% include "partials/_dataset_table.html" %}
 </div>
 
 <div class="section">
   <h2>Available GWAS datasets</h2>
-  <p class="lede">GWAS traits currently integrated into LocusView.</p>
+  <p class="lede">GWAS traits currently integrated into LocusHub.</p>
   {% include "partials/_gwas_dataset_table.html" %}
 </div>
 

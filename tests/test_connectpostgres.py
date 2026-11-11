@@ -865,3 +865,59 @@ def test_gwas_variant_hits_without_threshold_has_no_pval_filter() -> None:
 
     factory, _log = _routing_factory(responder)
     assert PostgresQtlRepository(factory).gwas_variant_hits("17", 1, [1]) == []
+
+
+def test_genes_in_region_maps_bounds_and_uses_overlap_query() -> None:
+    factory, log = _factory(
+        [("141510", "TP53", "ENSG00000141510.18", "chr17", 7661779, 7677434, "-")]
+    )
+    genes = PostgresQtlRepository(factory).genes_in_region("17", 7662000, 7670000)
+    assert genes == [Gene(141510, "TP53", "ENSG00000141510.18", "17", 7661779, 7677434, "-")]
+    sql, params = log[0]
+    assert 'start <= %s AND "end" >= %s' in sql
+    assert "LIMIT 1001" in sql
+    assert params == ("chr17", 7670000, 7662000)
+
+
+def test_region_anchor_query_uses_strand_aware_tss() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("sQTL",)]
+        if "gencode_v39" in sql:
+            assert "CASE WHEN strand = '-'" in sql
+            assert 'THEN "end" ELSE start END' in sql
+            assert params == ("chr1", 20000, 10000, 10000, 20000)
+            return [("000001",)]
+        assert "gene_id = ANY" in sql
+        assert params == (["000001"], 50)
+        return [("splice_event", "000001")]
+
+    factory, _ = _routing_factory(responder)
+    rows = PostgresQtlRepository(factory).phenotype_summaries_in_region(
+        "1",
+        10000,
+        20000,
+        1,
+        anchor_only=True,
+    )
+    assert [r.phenotype_id for r in rows] == ["splice_event"]
+
+
+def test_region_anchor_query_checks_peak_midpoint_before_limit() -> None:
+    def responder(sql: str, params: tuple[Any, ...]) -> list[Row]:
+        if "d.qtl_type" in sql:
+            return [("caQTL",)]
+        assert '(start::bigint + "end"::bigint) BETWEEN %s AND %s' in sql
+        assert sql.index("BETWEEN") < sql.index("ORDER BY") < sql.index("LIMIT")
+        assert params == ("chr1", 20000, 10000, 20000, 40000, 50)
+        return [(1, "chr1_10000_10040", None)]
+
+    factory, _ = _routing_factory(responder)
+    rows = PostgresQtlRepository(factory).phenotype_summaries_in_region(
+        "1",
+        10000,
+        20000,
+        2,
+        anchor_only=True,
+    )
+    assert [r.phenotype_id for r in rows] == ["chr1_10000_10040"]

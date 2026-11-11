@@ -335,13 +335,13 @@ def test_multi_track_region_mode() -> None:
         params={
             "locus_mode": "region",
             "chrom": "17",
-            "start": 7_669_000,
-            "end": 7_672_000,
+            "start": 7_660_000,
+            "end": 7_665_000,
             "datasets": "qtl:1",
         },
     )
     body = response.json()
-    assert body["label"] == "chr17:7669000-7672000"
+    assert body["label"] == "chr17:7660000-7665000"
     # Region mode's variants aren't sent (see _qtl_track's docstring: associations_in_region is
     # never rs_id-enriched and a window's raw variant set can be huge — the frontend re-fetches a
     # checked phenotype's own enriched variants from /api/locus/qtl-phenotype instead). The
@@ -561,3 +561,86 @@ def test_qtl_phenotype_rejects_unsafe_bounds(start: int, end: int) -> None:
         },
     )
     assert response.status_code == 400
+
+
+def test_region_filters_original_interval_by_tss_and_peak_center() -> None:
+    genes = [
+        Gene(1, "POS", "ENSG1", "1", 10001, 50000, "+"),
+        Gene(2, "NEG", "ENSG2", "1", 5000, 10001, "-"),
+        Gene(3, "OVERLAP_ONLY", "ENSG3", "1", 5000, 30000, "+"),
+        Gene(4, "NEG_OUT", "ENSG4", "1", 10001, 30000, "-"),
+        Gene(5, "DISPLAY_ONLY", "ENSG5", "1", 1000000, 1000100, "+"),
+        Gene(6, "LEFT_EDGE", "ENSG6", "1", 10000, 10001, "+"),
+        Gene(7, "RIGHT_EDGE", "ENSG7", "1", 19999, 20000, "-"),
+        Gene(8, "OTHER_CHROM", "ENSG8", "2", 10001, 10002, "+"),
+    ]
+    peaks = ["chr1_10000_10040", "chr1_0_50000", "chr1_19999_20002", "chr2_10000_10040"]
+    repo = FakeQtlRepository(
+        datasets=[Dataset(1, "Blood", "Test-eQTL-ALL"), Dataset(2, "Blood", "Test-caQTL-ALL")],
+        genes=genes,
+        associations=[
+            EqtlAssociation(
+                1, g.gene_id, None, int(g.chrom), 15000, 0.01, 0.1, 0.05, phenotype_id=g.ensembl_id
+            )
+            for g in genes
+        ]
+        + [
+            EqtlAssociation(2, None, None, 1, 15000, 0.01, 0.1, 0.05, phenotype_id=peak)
+            for peak in peaks
+        ],
+        gwas_datasets=[GwasDataset(1, "Trait", "EUR", "Test", "TEST")],
+        gwas_associations=[
+            GwasAssociation(1, 1, 2900000, 1e-9, 0.1, 0.05),
+            GwasAssociation(1, 1, 3000001, 1e-9, 0.1, 0.05),
+        ],
+    )
+    client = TestClient(create_app(repository=repo))
+    response = client.get(
+        "/api/locus/multi-track",
+        params={
+            "locus_mode": "region",
+            "chrom": "1",
+            "start": 10000,
+            "end": 20000,
+            "datasets": "qtl:1,qtl:2,gwas:1",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["query_region"] == {"chrom": "1", "start": 10000, "end": 20000}
+    assert body["region"] == {"chrom": "1", "start": 0, "end": 3000000}
+    tracks = {t["key"]: t for t in body["tracks"]}
+    assert {p["phenotype_id"] for p in tracks["qtl:1"]["phenotypes"]} == {
+        "ENSG1",
+        "ENSG2",
+        "ENSG6",
+        "ENSG7",
+    }
+    assert [p["phenotype_id"] for p in tracks["qtl:2"]["phenotypes"]] == ["chr1_10000_10040"]
+    assert [v["position"] for v in tracks["gwas:1"]["variants"]] == [2900000]
+
+
+@pytest.mark.parametrize(
+    "start,end,expected",
+    [
+        (10000, 20000, (0, 3000000)),
+        (10000000, 12000000, (9500000, 12500000)),
+        (1500000, 1500000, (0, 3000000)),
+    ],
+)
+def test_region_display_is_fixed_three_mb(start: int, end: int, expected: tuple[int, int]) -> None:
+    body = (
+        _client()
+        .get(
+            "/api/locus/multi-track",
+            params={
+                "locus_mode": "region",
+                "chrom": "17",
+                "start": start,
+                "end": end,
+                "datasets": "qtl:1",
+            },
+        )
+        .json()
+    )
+    assert (body["region"]["start"], body["region"]["end"]) == expected

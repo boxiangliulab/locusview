@@ -50,7 +50,7 @@ def _default_repository() -> QtlRepository:
 def create_app(repository: QtlRepository | None = None) -> FastAPI:
     """Build and return the locusview FastAPI application."""
     repo = repository if repository is not None else _default_repository()
-    app = FastAPI(title="locusview", version=__version__)
+    app = FastAPI(title="LocusHub", version=__version__)
     # Search data's fully expanded tables are large and very repetitive HTML (a well-studied
     # variant is ~35k rows / ~12 MB raw); gzip shrinks that by an order of magnitude.
     app.add_middleware(GZipMiddleware, minimum_size=1024)

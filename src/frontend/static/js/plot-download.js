@@ -54,7 +54,7 @@ const PlotDownload = (() => {
   async function download(plotDiv, nameFn, btn) {
     if (!plotDiv || !plotDiv.data) return; // nothing plotted yet (loading / "no data" message)
     const name = slug(typeof nameFn === "function" ? nameFn() : nameFn) || "plot";
-    const filename = `locusview_${name}.svg`;
+    const filename = `locushub_${name}.svg`;
     const width = Math.round(plotDiv.offsetWidth) || 900;
     const height = Math.round(plotDiv.offsetHeight) || 420;
     const label = btn.textContent;

@@ -62,7 +62,8 @@
       <input type="text" id="db-gene" placeholder="Gene symbol or Ensembl id, e.g. TP53" value="{{ gene }}">
     </div>
     <div class="db-locus-input" id="db-locus-region" {{ '' if locus_mode == 'region' else 'hidden' }}>
-      <input type="text" id="db-region" placeholder="e.g. chr17:7660000-7690000" value="{{ region }}">
+      <input type="text" id="db-region" aria-describedby="db-region-hint" placeholder="e.g. chr17:7660000-7690000" value="{{ region }}">
+      <div class="db-hint" id="db-region-hint">Only QTL phenotypes whose gene TSS or caQTL peak center falls within the query region are shown. Plots display 3 Mb centered on the query midpoint (±1.5 Mb), shifted right near chromosome start to retain the full 3 Mb.</div>
     </div>
     <div class="db-locus-input" id="db-locus-variant" {{ '' if locus_mode == 'variant' else 'hidden' }}>
       <input type="text" id="db-variant" placeholder="rsID or chr17:7670000" value="{{ variant }}">

@@ -218,7 +218,7 @@ const MultiTrackPlot = (() => {
       ],
       showlegend: false,
     };
-    Plotly.newPlot(plotDiv, [trace, ...queryMarker.traces], layout, { responsive: true, displayModeBar: false });
+    GeneTrack.plot(plotDiv, [trace, ...queryMarker.traces], layout, { responsive: true, displayModeBar: false }, region, track.highlight_gene);
     // Bottom-right "↓ SVG" export for this panel (static/js/plot-download.js). Attached after
     // newPlot so the export always sees a plotted div; it wraps plotDiv rather than living inside
     // it, so purgePanels()'s Plotly.purge() can't strip the button.
@@ -226,6 +226,7 @@ const MultiTrackPlot = (() => {
 
     if (track.kind === "qtl" && onPointClick) {
       plotDiv.on("plotly_click", (ev) => {
+        if (ev.points[0].data.meta?.geneTrack) return;
         const [position] = ev.points[0].customdata;
         onPointClick(region.chrom, position);
       });
@@ -275,7 +276,7 @@ const MultiTrackPlot = (() => {
     );
 
     container.innerHTML = "";
-    panels.forEach((track) => renderTrack(container, track, data.region, onPointClick, data.query_variant));
+    panels.forEach((track) => renderTrack(container, { ...track, highlight_gene: data.gene?.symbol }, data.region, onPointClick, data.query_variant));
     updateLegend(legendEl);
   }
 
@@ -405,17 +406,18 @@ const MultiTrackPlot = (() => {
     }
     container.innerHTML = "<p class='muted'>Loading&hellip;</p>";
 
-    // Region and variant searches keep the phenotype itself at the center of a 4 Mb plot.
-    // Widen the panel in proportion to the added genomic span instead of compressing its points.
+    // Region mode uses the API's fixed 3 Mb display window. Variant mode retains its 4 Mb plot.
+    // Keep the same genomic scale: region is 3 Mb wide, versus the variant plot's 4 Mb.
     const expanded = locusMode === "region" || locusMode === "variant";
     const center = locusMode === "variant" && queryVariant?.position != null
       ? queryVariant.position : (region.start + region.end) / 2;
-    const plotRegion = expanded
+    const plotRegion = locusMode === "variant"
       ? { ...region, start: Math.max(0, Math.floor(center - 2_000_000)), end: Math.floor(center + 2_000_000) }
       : region;
     const originalSpan = Math.max(1, region.end - region.start);
     const plotSpan = plotRegion.end - plotRegion.start;
-    const widthFactor = expanded ? Math.max(1, Math.min(4, plotSpan / originalSpan)) : 1;
+    const widthFactor = locusMode === "region" ? 1.5
+      : expanded ? Math.max(1, Math.min(4, plotSpan / originalSpan)) : 1;
     const expandedWidth = expanded ? Math.round(Math.min(container.clientWidth, 830) * widthFactor) : null;
 
     const panels = await Promise.all(
@@ -478,7 +480,7 @@ const MultiTrackPlot = (() => {
     );
 
     container.innerHTML = "";
-    panels.forEach((panel) => renderTrack(container, panel, plotRegion, onPointClick, queryVariant, expandedWidth));
+    panels.forEach((panel, i) => renderTrack(container, { ...panel, highlight_gene: selections[i].p.gene_id }, plotRegion, onPointClick, queryVariant, expandedWidth));
     updateLegend(legendEl);
   }
 

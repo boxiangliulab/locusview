@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}locusview{% endblock %}</title>
+  <title>{% block title %}LocusHub{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&display=swap" />
@@ -15,7 +15,7 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="LocusView home">
+    <a class="brand" href="/" aria-label="LocusHub home">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.5"></circle>
         <circle cx="12" cy="12" r="2.5" fill="currentColor"></circle>
@@ -24,7 +24,7 @@
         <line x1="2.5" y1="12" x2="7" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line>
         <line x1="17" y1="12" x2="21.5" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line>
       </svg>
-      <span>Locus<span class="accent">View</span></span>
+      <span>Locus<span class="accent">Hub</span></span>
     </a>
     <nav class="site-nav">
       <a href="/" class="{{ 'active' if active == 'home' else '' }}">Home</a>
@@ -42,8 +42,8 @@
 
   <footer class="site-footer">
     <div class="site-footer-inner">
-      <span class="site-footer-brand">Locus<span>View</span></span>
-      <span>LocusView v{{ version }} &middot; Phase 1 &middot; data: QTL &amp; GWAS via the shared LocusCompare2 database</span>
+      <span class="site-footer-brand">Locus<span>Hub</span></span>
+      <span>LocusHub v{{ version }} &middot; Phase 1 &middot; data: QTL &amp; GWAS via the shared LocusCompare2 database</span>
     </div>
   </footer>
 </body>

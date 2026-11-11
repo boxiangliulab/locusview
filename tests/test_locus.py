@@ -327,3 +327,52 @@ def test_locus_regional_variant_mode_timeout_is_503() -> None:
         params={"locus_mode": "variant", "tissue": 8, "chrom": "17", "position": 1},
     )
     assert r.status_code == 503
+
+
+def test_gene_track_returns_overlapping_genes_and_coordinates() -> None:
+    genes = [
+        Gene(1, "LEFT", "ENSG1.1", "17", 50, 110, "+"),
+        Gene(2, "SPAN", "ENSG2.1", "17", 20, 300, "-"),
+        Gene(3, "RIGHT", "ENSG3.1", "17", 190, 250, "+"),
+        Gene(4, "OUT", "ENSG4.1", "17", 201, 300, "+"),
+        Gene(5, "OTHER", "ENSG5.1", "1", 100, 200, "+"),
+    ]
+    client = TestClient(create_app(repository=FakeQtlRepository(genes=genes)))
+    response = client.get("/api/locus/genes?chrom=17&start=100&end=200")
+    assert response.status_code == 200
+    body = response.json()
+    assert [g["symbol"] for g in body["genes"]] == ["SPAN", "LEFT", "RIGHT"]
+    assert body["genes"][0]["start"] == 20  # preserve actual bounds for the tooltip
+    assert body["genes"][0]["strand"] == "-"
+    assert body["annotation"] == "GENCODE v39 · GRCh38"
+    assert body["truncated"] is False
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "chrom=bad&start=0&end=1",
+        "chrom=17&start=-1&end=1",
+        "chrom=17&start=2&end=1",
+        "chrom=17&start=0&end=10000001",
+    ],
+)
+def test_gene_track_rejects_invalid_regions(query: str) -> None:
+    assert _plot_client().get("/api/locus/genes?" + query).status_code == 400
+
+
+def test_gene_track_reports_truncation() -> None:
+    genes = [Gene(i, f"G{i}", f"ENSG{i}.1", "17", i, i + 10, "+") for i in range(1001)]
+    client = TestClient(create_app(repository=FakeQtlRepository(genes=genes)))
+    body = client.get("/api/locus/genes?chrom=17&start=0&end=2000").json()
+    assert len(body["genes"]) == 1000
+    assert body["truncated"] is True
+
+
+def test_gene_track_timeout_returns_recoverable_error() -> None:
+    class TimeoutGenes(FakeQtlRepository):
+        def genes_in_region(self, chrom: str, start: int, end: int) -> list[Gene]:
+            raise RepositoryTimeoutError("timeout")
+
+    client = TestClient(create_app(repository=TimeoutGenes()))
+    assert client.get("/api/locus/genes?chrom=17&start=0&end=2000").status_code == 503

@@ -46,13 +46,13 @@ const LocusPlot = (() => {
     }];
     const layout = {
       margin: { t: 8, r: 8, b: 44, l: 56 }, hovermode: "closest",
-      xaxis: { title: "chr" + data.region.chrom + " (Mb)", gridcolor: "#f1f5f9", zeroline: false },
+      xaxis: { range: [data.region.start / 1e6, data.region.end / 1e6], title: "chr" + data.region.chrom + " (Mb)", gridcolor: "#f1f5f9", zeroline: false },
       yaxis: { title: "-log10(P)", gridcolor: "#f1f5f9", zeroline: false },
       plot_bgcolor: "#ffffff", paper_bgcolor: "#ffffff", font: { color: "#334155", size: 12 },
       shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 7.301, y1: 7.301,
                  line: { color: "#94a3b8", width: 1, dash: "dot" } }],
     };
-    Plotly.react(plotDiv, traces, layout, { responsive: true, displayModeBar: false });
+    GeneTrack.plot(plotDiv, traces, layout, { responsive: true, displayModeBar: false }, data.region, data.gene);
     if (!state.clickBound) {
       plotDiv.on("plotly_click", (ev) => onClick(state, ev));
       state.clickBound = true;
@@ -61,6 +61,7 @@ const LocusPlot = (() => {
 
   // Click-to-recolor: fetch LD to the clicked point's rsID and re-render with it as the new lead.
   async function onClick(state, ev) {
+    if (ev.points[0].data.meta?.geneTrack) return;
     const rs = ev.points[0].customdata[0];
     if (rs === null) return;
     const u = "/api/ld?chrom=" + state.data.region.chrom + "&lead=" + rs +

@@ -37,7 +37,7 @@ def test_index_renders_landing_page() -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "locusview" in response.text.lower()
+    assert "locushub" in response.text.lower()
     assert __version__ in response.text
     assert "Available QTL datasets" in response.text
 

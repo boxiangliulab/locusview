@@ -59,7 +59,7 @@ code {
 
 /* Reserve the brand's original space so the navigation links stay in place. */
 .site-header::before {
-  content: "LocusView";
+  content: "LocusHub";
   padding-left: 32px;
   font-size: 19px;
   font-weight: 700;
@@ -576,3 +576,28 @@ body .news-entry::before { box-shadow: 0 0 0 3px rgba(18, 19, 23, 0.12); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* Gene annotation controls sit in the chart's section heading, outside the data area. */
+.gene-track-toggle {
+  position: absolute; right: 8px; z-index: 2; height: 24px;
+  display: inline-flex; align-items: center; gap: 5px; padding: 0 9px;
+  border: 1px solid #dbe3ef; border-radius: 6px; background: #fff;
+  color: #475569; font: 500 10px var(--sans); line-height: 1;
+  cursor: pointer; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.gene-track-toggle::after {
+  content: ''; width: 4px; height: 4px; margin-top: -2px;
+  border-right: 1px solid currentColor; border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+.gene-track-toggle[aria-expanded="true"]::after { transform: rotate(225deg); margin-top: 2px; }
+.gene-track-toggle:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+
+.gene-track-tooltip {
+  position: absolute; z-index: 5; pointer-events: none;
+  max-width: min(300px, calc(100% - 12px)); padding: 10px 12px;
+  border: 1px solid #dbe3ef; border-radius: 8px; background: #fff;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+  color: #475569; font: 11px / 1.65 var(--sans); overflow-wrap: anywhere;
+}
+.gene-track-tooltip b { color: #1d4ed8; font-size: 12px; }

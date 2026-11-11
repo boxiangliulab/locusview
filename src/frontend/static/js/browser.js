@@ -184,7 +184,10 @@
       const resp = await fetch("/api/locus/multi-track?" + params.toString());
       if (!resp.ok) throw new Error((await resp.json()).error || "request failed");
       const data = await resp.json();
-      plotSub.textContent = `chr${data.region.chrom}:${data.region.start}-${data.region.end}`;
+      const displayedRegion = `chr${data.region.chrom}:${data.region.start.toLocaleString()}–${data.region.end.toLocaleString()}`;
+      plotSub.textContent = data.query_region
+        ? `Query: chr${data.query_region.chrom}:${data.query_region.start.toLocaleString()}–${data.query_region.end.toLocaleString()} · Display: ${displayedRegion} (3 Mb)`
+        : displayedRegion;
       if (data.gene?.ensembl_id) {
         // External databases use the stable ENSG id without its annotation-version suffix.
         const ensemblId = data.gene.ensembl_id.split(".", 1)[0];
@@ -227,7 +230,7 @@
       const linkedKey = linkedPhenotype && datasets.length === 1 && datasets[0].startsWith("qtl:")
         ? datasets[0] : null;
       const linkedTrack = linkedKey && data.tracks.find((t) => t.key === linkedKey && t.kind === "qtl");
-      if (linkedTrack && Array.isArray(linkedTrack.phenotypes)
+      if (p.locus_mode !== "region" && linkedTrack && Array.isArray(linkedTrack.phenotypes)
           && !linkedTrack.phenotypes.some((p) => p.phenotype_id === linkedPhenotype)) {
         linkedTrack.phenotypes.push({ phenotype_id: linkedPhenotype, lead_pvalue: null });
       }

@@ -135,7 +135,7 @@ def test_home_datasources_card_uses_repository_count() -> None:
 def test_home_stats_show_publications_tissues_and_cell_types() -> None:
     response = _client(catalog_stats=CatalogStats(32, 55, 117, 54_992_778_751)).get("/")
     assert (
-        '<span class="brand-name">LocusView</span>：<span class="accent">'
+        '<span class="brand-name">LocusHub</span>：<span class="accent">'
         'Explore QTL associations across cell types and tissues</span>'
     ) in response.text
     for value, label in (
